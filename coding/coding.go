@@ -71,7 +71,7 @@ func Unmarshal(buf []byte) (*ld.Doc, error) {
 	}
 
 	// have to call NewDoc so the initial parsing (schema) takes place.
-	return ld.NewDoc(doc.Data), nil
+	return doc, nil
 }
 
 // UnmarshalFrom deserializes an ipfs-ld document from a reader.

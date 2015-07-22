@@ -16,10 +16,6 @@ import (
 //
 // which is then taken to be a merkle-link, which IPFS handles specially.
 type Doc struct {
-	// Schema is a link to the schema of this document. If the document
-	// does not define one, it is assumed to be the root IPFS-LD schema.
-	Schema string
-
 	// Data is the raw document data
 	Data map[interface{}]interface{}
 
@@ -37,7 +33,7 @@ type Doc struct {
 }
 
 func NewDoc(data map[interface{}]interface{}) *Doc {
-	return &Doc{Schema: "placeholder", Data: data}
+	return &Doc{Data: data}
 }
 
 func (d *Doc) StrData() map[string]interface{} {
