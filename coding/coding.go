@@ -3,11 +3,18 @@ package ipfsld
 import (
 	"bytes"
 	"io"
+	"reflect"
 
 	codec "github.com/ugorji/go/codec"
 
 	ld "github.com/ipfs/go-ipfsld"
 )
+
+var MapType reflect.Type
+
+func init() {
+	MapType = reflect.TypeOf(ld.Doc(nil))
+}
 
 type Encoder interface {
 	Encode(doc *ld.Doc) error
@@ -22,14 +29,15 @@ type encoder struct {
 }
 
 func NewEncoder(w io.Writer) *encoder {
-	h := &codec.CborHandle{}
+	h := new(codec.CborHandle)
+	h.MapType = MapType
 	h.Canonical = true
 	enc := codec.NewEncoder(w, h)
 	return &encoder{enc}
 }
 
 func (c *encoder) Encode(doc *ld.Doc) error {
-	return c.enc.Encode(&doc.Data)
+	return c.enc.Encode(&doc)
 }
 
 type decoder struct {
@@ -37,14 +45,15 @@ type decoder struct {
 }
 
 func NewDecoder(r io.Reader) *decoder {
-	h := &codec.CborHandle{}
+	h := new(codec.CborHandle)
+	h.MapType = MapType
 	h.Canonical = true
 	dec := codec.NewDecoder(r, h)
 	return &decoder{dec}
 }
 
 func (c *decoder) Decode(doc *ld.Doc) error {
-	return c.dec.Decode(&doc.Data)
+	return c.dec.Decode(&doc)
 }
 
 // Marshal serializes an ipfs-ld document to a []byte.

@@ -5,12 +5,11 @@ import (
 	"testing"
 
 	ld "github.com/ipfs/go-ipfsld"
-	mh "github.com/jbenet/go-multihash"
 )
 
 type TC struct {
 	cbor  []byte
-	src   map[interface{}]interface{}
+	src   ld.Doc
 	links map[string]ld.Link
 	typ   string
 	ctx   interface{}
@@ -18,27 +17,19 @@ type TC struct {
 
 var testCases []TC
 
-func mmh(s string) mh.Multihash {
-	h, err := mh.FromB58String(s)
-	if err != nil {
-		panic("invalid multihash: " + s)
-	}
-	return h
-}
-
 func init() {
 	testCases = append(testCases, TC{
 		[]byte{},
-		map[interface{}]interface{}{
+		ld.Doc{
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
-			"baz": map[interface{}]interface{}{
+			"baz": ld.Doc{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 		},
 		map[string]ld.Link{
-			"baz": {Name: "baz", Hash: mmh("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+			"baz": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
 		},
 		"",
 		nil,
@@ -46,33 +37,33 @@ func init() {
 
 	testCases = append(testCases, TC{
 		[]byte{},
-		map[interface{}]interface{}{
+		ld.Doc{
 			"foo":      "bar",
 			"@type":    "commit",
 			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
-			"baz": map[interface{}]interface{}{
+			"baz": ld.Doc{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bazz": map[interface{}]interface{}{
+			"bazz": ld.Doc{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar": map[interface{}]interface{}{
+			"bar": ld.Doc{
 				"@type": "mlinkoo",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar2": map[interface{}]interface{}{
-				"foo": map[interface{}]interface{}{
+			"bar2": ld.Doc{
+				"foo": ld.Doc{
 					"@type": "mlink",
 					"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 				},
 			},
 		},
 		map[string]ld.Link{
-			"baz":      {Name: "baz", Hash: mmh("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bazz":     {Name: "bazz", Hash: mmh("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bar2/foo": {Name: "bar2/foo", Hash: mmh("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+			"baz":      {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+			"bazz":     {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+			"bar2/foo": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
 		},
 		"",
 		"/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
@@ -82,8 +73,8 @@ func init() {
 
 func TestMarshaling(t *testing.T) {
 	for tci, tc := range testCases {
-		doc1 := ld.NewDoc(tc.src)
-		d1, err := Marshal(doc1)
+		doc1 := tc.src
+		d1, err := Marshal(&doc1)
 		if err != nil {
 			t.Error("marshal error", err, tci)
 		}

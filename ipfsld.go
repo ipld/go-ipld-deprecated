@@ -1,11 +1,22 @@
 package ipfsld
 
 import (
-	"bytes"
+	"errors"
 	"path"
+	"reflect"
 	"strconv"
+	"strings"
 
 	mh "github.com/jbenet/go-multihash"
+)
+
+const (
+	LinkType = "mlink"
+	HashKey  = "hash"
+	ValueKey = "@value"
+	TypeKey  = "@type"
+	CtxKey   = "@context"
+	IDKey    = "@id"
 )
 
 // Doc is an ipfs-ld document. effectively, it is just a JSON-LD document
@@ -15,85 +26,66 @@ import (
 //    "myfield": { "value": "Qmabcbcbdba", "@type": "mlink" }
 //
 // which is then taken to be a merkle-link, which IPFS handles specially.
-type Doc struct {
-	// Data is the raw document data
-	Data map[interface{}]interface{}
+type Doc map[string]interface{}
 
-	// links is a map of string -> Link. this is a flattened map, using
-	// JSON Pointer syntax. Meaning "foo/bar" points to "<hash>" in:
-	//
-	//   { "foo": {"bar": "<hash>" } }
-	//
-	links  map[string]Link
-	linksP bool
-
-	// sData is a map[string]interface{} for convenience
-	sData  map[string]interface{}
-	sDataP bool
+func (d Doc) Get(path string) interface{} {
+	return d.GetC(strings.Split(path, "/"))
 }
 
-func NewDoc(data map[interface{}]interface{}) *Doc {
-	return &Doc{Data: data}
-}
-
-func (d *Doc) StrData() map[string]interface{} {
-	if d.sDataP {
-		return d.sData
+func (d Doc) GetC(path []string) interface{} {
+	if len(path) == 0 {
+		return d
 	}
-
-	for k, v := range d.Data {
-		if sk, ok := k.(string); ok {
-			d.sData[sk] = v
-		}
+	v := d[path[0]]
+	if len(path) == 1 || v == nil {
+		return d[path[0]]
 	}
-	d.sDataP = true
-	return d.sData
+	if vd, ok := v.(Doc); ok {
+		return vd.GetC(path[1:])
+	}
+	return v
 }
 
-func (d *Doc) Type() string {
-	s, _ := d.StrData()["@type"].(string)
+func (d Doc) Type() string {
+	s, _ := d[TypeKey].(string)
 	return s
 }
 
-func (d *Doc) Context() interface{} {
-	return d.StrData()["@context"]
+func (d Doc) Context() interface{} {
+	return d[CtxKey]
 }
 
 // Links returns all the merkle-links in the document. When the document
 // is parsed, all the links are identified and references are cached, so
 // getting the links only walks the document _once_. Note though that the
 // entire document must be walked.
-func (d *Doc) Links() map[string]Link {
-	if !d.linksP {
-		d.links = Links(d)
-		d.linksP = true
-	}
-	return d.links
+func (d Doc) Links() map[string]Link {
+	return Links(d)
 }
 
 // Link is a merkle-link structure.
-type Link struct {
-	Name string
-	Hash mh.Multihash
-	Data map[interface{}]interface{}
+type Link Doc
+
+func (l Link) HashStr() string {
+	s, _ := l[HashKey].(string)
+	return s
+}
+
+func (l Link) Hash() (mh.Multihash, error) {
+	s := l.HashStr()
+	if s == "" {
+		return nil, errors.New("no hash in link")
+	}
+	return mh.FromB58String(s)
 }
 
 func (l Link) Equal(l2 Link) bool {
-	if l.Name != l2.Name {
-		return false
-	}
-	if !bytes.Equal(l.Hash, l2.Hash) {
-		return false
-	}
-	// if !mapEqual(l.Data, l2.Data) {
-	//   return false
-	// }
-	return true
+	return reflect.DeepEqual(l, l2)
 }
 
-func Links(doc *Doc) map[string]Link {
+func Links(doc Doc) map[string]Link {
 	m := map[string]Link{}
-	walkDoc(m, "", doc.Data)
+	walkDoc(m, "", doc)
 	return m
 }
 
@@ -102,29 +94,28 @@ func walkDoc(links map[string]Link, jpath string, rest interface{}) {
 		return
 	}
 
-	if mrest, ok := rest.(map[interface{}]interface{}); ok { // it's a map!
-		for k, v := range mrest {
-			ks, ok := k.(string)
-			if !ok {
-				continue
-			}
+	walkElem := func(k string, v interface{}) {
+		jpath2 := path.Join(jpath, k)
+		if l, ok := getLink(jpath2, v); ok {
+			links[jpath2] = l
+		} else {
+			walkDoc(links, jpath2, v)
+		}
+	}
 
-			jpath2 := path.Join(jpath, ks)
-			if l, ok := getLink(jpath2, v); ok {
-				links[jpath2] = l
-			} else {
-				walkDoc(links, jpath2, v)
-			}
+	if mrest, ok := rest.(Doc); ok { // it's a map!
+		for k, v := range mrest {
+			walkElem(k, v)
+		}
+
+	} else if mrest, ok := rest.(map[string]interface{}); ok { // it's a map!
+		for k, v := range mrest {
+			walkElem(k, v)
 		}
 
 	} else if arest, ok := rest.([]interface{}); ok { // it's an array!
 		for i, v := range arest {
-			jpath2 := path.Join(jpath, strconv.Itoa(i))
-			if l, ok := getLink(jpath2, v); ok {
-				links[jpath2] = l
-			} else {
-				walkDoc(links, jpath2, v)
-			}
+			walkElem(strconv.Itoa(i), v)
 		}
 	}
 }
@@ -134,16 +125,16 @@ func walkDoc(links map[string]Link, jpath string, rest interface{}) {
 //
 //   { "linkname" : { "@type"  : "mlink", "hash": "<multihash>" } }
 func isLink(value interface{}) bool {
-	valmap, ok := value.(map[interface{}]interface{})
+	valmap, ok := value.(Doc)
 	if !ok {
 		return false
 	}
 
-	ts, ok := valmap["@type"].(string)
+	ts, ok := valmap[TypeKey].(string)
 	if !ok {
 		return false
 	}
-	return ts == "mlink"
+	return ts == LinkType
 }
 
 // returns the link value of an object. for now we assume that all links
@@ -155,19 +146,9 @@ func getLink(name string, value interface{}) (l Link, ok bool) {
 		return
 	}
 
-	valmap, ok := value.(map[interface{}]interface{})
-	if !ok {
-		return
+	l = make(Link)
+	for k, v := range value.(Doc) {
+		l[k] = v
 	}
-	hashS, ok := valmap["hash"].(string)
-	if !ok {
-		return
-	}
-
-	hash, err := mh.FromB58String(hashS)
-	if err != nil {
-		return
-	}
-
-	return Link{Name: name, Hash: hash, Data: valmap}, true
+	return l, true
 }
