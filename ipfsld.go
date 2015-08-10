@@ -1,15 +1,13 @@
-package ipfsld
+package ipld
 
 import (
 	"errors"
-	"path"
 	"reflect"
-	"strconv"
-	"strings"
 
 	mh "github.com/jbenet/go-multihash"
 )
 
+// These are the constants used in the format.
 const (
 	LinkType = "mlink"
 	HashKey  = "hash"
@@ -19,39 +17,32 @@ const (
 	IDKey    = "@id"
 )
 
-// Doc is an ipfs-ld document. effectively, it is just a JSON-LD document
-// (which is {,de}serialized to JSON or CBOR) which derives from a base
-// schema, the IPFS-LD schema (@context). This allows keys to specify:
+// Node is an IPLD node. effectively, it is equivalent to a JSON-LD object.
+// (which is {,de}serialized to CBOR or JSON) which derives from a base
+// schema, the IPLD schema (@context). This allows keys to specify:
 //
-//    "myfield": { "value": "Qmabcbcbdba", "@type": "mlink" }
+//    "myfield": { "@value": "Qmabcbcbdba", "@type": "mlink" }
 //
-// which is then taken to be a merkle-link, which IPFS handles specially.
-type Doc map[string]interface{}
+// "mlink" signals that "@value" is taken to be a merkle-link, which IPFS
+// handles specially.
+type Node map[string]interface{}
 
-func (d Doc) Get(path string) interface{} {
-	return d.GetC(strings.Split(path, "/"))
+// Get retrieves a property of the node. it uses unix path notation,
+// splitting on "/".
+func (n Node) Get(path_ string) interface{} {
+	return GetPath(n, path_)
 }
 
-func (d Doc) GetC(path []string) interface{} {
-	if len(path) == 0 {
-		return d
-	}
-	v := d[path[0]]
-	if len(path) == 1 || v == nil {
-		return d[path[0]]
-	}
-	if vd, ok := v.(Doc); ok {
-		return vd.GetC(path[1:])
-	}
-	return v
-}
-
-func (d Doc) Type() string {
+// Type is a convenience method to retrieve "@type", if there is one.
+func (d Node) Type() string {
 	s, _ := d[TypeKey].(string)
 	return s
 }
 
-func (d Doc) Context() interface{} {
+// Context is a convenience method to retrieve the JSON-LD-style context.
+// It may be a string (link to context), a []interface (multiple contexts),
+// or a Node (an inline context)
+func (d Node) Context() interface{} {
 	return d[CtxKey]
 }
 
@@ -59,18 +50,60 @@ func (d Doc) Context() interface{} {
 // is parsed, all the links are identified and references are cached, so
 // getting the links only walks the document _once_. Note though that the
 // entire document must be walked.
-func (d Doc) Links() map[string]Link {
+func (d Node) Links() map[string]Link {
 	return Links(d)
 }
 
-// Link is a merkle-link structure.
-type Link Doc
+// Link is a merkle-link to a target Node. The Link object is
+// represented by a JSON-LD style map:
+//
+//   { "@type": "mlink", "@value": <multihash>, ... }
+//
+// Links support adding other data, which will be
+// serialized and de-serialized along with the link.
+// This allows users to set other properties on links:
+//
+//   {
+//     "@type": "mlink",
+//     "@value": <multihash>,
+//     "unixType": "dir",
+//     "unixMode": "0777",
+//   }
+//
+// looking at a whole filesystem node, we might see something like:
+//
+//   {
+//     "@context": "/ipfs/Qmf1ec6n9f8kW8JTLjqaZceJVpDpZD4L3aPoJFvssBE7Eb/merkleweb",
+//     "foo": {
+//       "@type": "mlink",
+//       "@value": <multihash>,
+//       "unixType": "dir",
+//       "unixMode": "0777",
+//     },
+//     "bar": {
+//       "@type": "mlink",
+//       "@value": <multihash>,
+//       "unixType": "file",
+//       "unixMode": "0755",
+//     }
+//   }
+//
+type Link Node
 
+// Type returns the type of the link. It should be "mlink"
+func (l Link) Type() string {
+	s, _ := l[TypeKey].(string)
+	return s
+}
+
+// HashStr returns the string value of l["hash"],
+// which is the value we use to store hashes.
 func (l Link) HashStr() string {
 	s, _ := l[HashKey].(string)
 	return s
 }
 
+// Hash returns the multihash value of the link.
 func (l Link) Hash() (mh.Multihash, error) {
 	s := l.HashStr()
 	if s == "" {
@@ -79,75 +112,80 @@ func (l Link) Hash() (mh.Multihash, error) {
 	return mh.FromB58String(s)
 }
 
+// Equal returns whether two Link objects are equal.
+// It uses reflect.DeepEqual, so beware compating
+// large structures.
 func (l Link) Equal(l2 Link) bool {
 	return reflect.DeepEqual(l, l2)
 }
 
-func Links(doc Doc) map[string]Link {
+// Links walks given node and returns all links found,
+// in a flattened map. the map keys use path notation,
+// made up of the intervening keys. For example:
+//
+// 		{
+//			"foo": {
+//				"quux": { @type: mlink, @value: Qmaaaa... },
+// 			},
+//			"bar": {
+//				"baz": { @type: mlink, @value: Qmbbbb... },
+//			},
+//		}
+//
+// would produce links:
+//
+// 		{
+//			"foo/quux": { @type: mlink, @value: Qmaaaa... },
+//			"bar/baz": { @type: mlink, @value: Qmbbbb... },
+//		}
+//
+// WARNING: your nodes should not use `/` as key names. it will
+// confuse link parsers. thus, if we find any map keys with slash
+// in them, we simply ignore them.
+func Links(n Node) map[string]Link {
 	m := map[string]Link{}
-	walkDoc(m, "", doc)
+	Walk(n, func(root, curr Node, path string, err error) error {
+		if err != nil {
+			return err // if anything went wrong, bail.
+		}
+
+		if l, ok := LinkCast(curr); ok {
+			m[path] = l
+		}
+		return nil
+	})
 	return m
-}
-
-func walkDoc(links map[string]Link, jpath string, rest interface{}) {
-	if rest == nil {
-		return
-	}
-
-	walkElem := func(k string, v interface{}) {
-		jpath2 := path.Join(jpath, k)
-		if l, ok := getLink(jpath2, v); ok {
-			links[jpath2] = l
-		} else {
-			walkDoc(links, jpath2, v)
-		}
-	}
-
-	if mrest, ok := rest.(Doc); ok { // it's a map!
-		for k, v := range mrest {
-			walkElem(k, v)
-		}
-
-	} else if mrest, ok := rest.(map[string]interface{}); ok { // it's a map!
-		for k, v := range mrest {
-			walkElem(k, v)
-		}
-
-	} else if arest, ok := rest.([]interface{}); ok { // it's an array!
-		for i, v := range arest {
-			walkElem(strconv.Itoa(i), v)
-		}
-	}
 }
 
 // checks whether a value is a link. for now we assume that all links
 // follow:
 //
-//   { "linkname" : { "@type"  : "mlink", "hash": "<multihash>" } }
-func isLink(value interface{}) bool {
-	valmap, ok := value.(Doc)
+//   { "@type"  : "mlink", "hash": "<multihash>" }
+func isLink(v interface{}) bool {
+	vn, ok := v.(Node)
 	if !ok {
 		return false
 	}
 
-	ts, ok := valmap[TypeKey].(string)
+	ts, ok := vn[TypeKey].(string)
 	if !ok {
 		return false
 	}
+
 	return ts == LinkType
 }
 
 // returns the link value of an object. for now we assume that all links
 // follow:
 //
-//   { "linkname" : { "@type"  : "mlink", "hash": "<multihash>" } }
-func getLink(name string, value interface{}) (l Link, ok bool) {
-	if !isLink(value) {
+//   { "@type"  : "mlink", "hash": "<multihash>" }
+func LinkCast(v interface{}) (l Link, ok bool) {
+	if !isLink(v) {
 		return
 	}
 
 	l = make(Link)
-	for k, v := range value.(Doc) {
+	for k, v := range v.(Node) {
 		l[k] = v
 	}
 	return l, true

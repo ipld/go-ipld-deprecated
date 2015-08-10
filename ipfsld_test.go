@@ -1,11 +1,13 @@
-package ipfsld
+package ipld
 
 import (
 	"testing"
+
+	mh "github.com/jbenet/go-multihash"
 )
 
 type TC struct {
-	src   Doc
+	src   Node
 	links map[string]Link
 	typ   string
 	ctx   interface{}
@@ -13,12 +15,20 @@ type TC struct {
 
 var testCases []TC
 
+func mmh(b58 string) mh.Multihash {
+	h, err := mh.FromB58String(b58)
+	if err != nil {
+		panic("failed to decode multihash")
+	}
+	return h
+}
+
 func init() {
 	testCases = append(testCases, TC{
-		Doc{
+		Node{
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
-			"baz": Doc{
+			"baz": Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
@@ -31,24 +41,24 @@ func init() {
 	})
 
 	testCases = append(testCases, TC{
-		Doc{
+		Node{
 			"foo":      "bar",
 			"@type":    "commit",
 			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
-			"baz": Doc{
+			"baz": Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bazz": Doc{
+			"bazz": Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar": Doc{
+			"bar": Node{
 				"@type": "mlinkoo",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar2": Doc{
-				"foo": Doc{
+			"bar2": Node{
+				"foo": Node{
 					"@type": "mlink",
 					"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 				},
@@ -70,6 +80,7 @@ func TestParsing(t *testing.T) {
 
 		// check links
 		links := doc.Links()
+		t.Log(links)
 		for k, l1 := range tc.links {
 			l2 := links[k]
 			if !l1.Equal(l2) {
