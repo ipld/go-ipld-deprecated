@@ -22,3 +22,12 @@ type Commit struct {
 	Object    dag.Link   // what we version ("tree" in git)
 	Comment   String     // describes the commit
 }
+
+func (c *Commit) IPLDValidate() bool {
+	// check at least one parent exists
+	// check Parents have proper type
+	// check author exists and has proper type
+	// check commiter exists and has proper type
+	// check object exists and has proper type
+	return true
+}
