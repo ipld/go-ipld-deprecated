@@ -85,11 +85,11 @@ func TestMarshaling(t *testing.T) {
 		}
 
 		// these are not equal.
-		// if !reflect.DeepEqual(node1.Data, node2.Data) {
+		// if !reflect.DeepEqual(&node1, node2) {
 		// 	d2, _ := Marshal(node2)
-		// 	t.Log(node1)
-		// 	t.Log(d1)
+		// 	t.Log(&node1)
 		// 	t.Log(node2)
+		// 	t.Log(d1)
 		// 	t.Log(d2)
 		// 	t.Error("RTTed node not equal", tci, bytes.Equal(d1, d2))
 		// }
