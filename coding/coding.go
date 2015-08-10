@@ -7,21 +7,21 @@ import (
 
 	codec "github.com/ugorji/go/codec"
 
-	ld "github.com/ipfs/go-ipfsld"
+	ld "github.com/ipfs/go-ipld"
 )
 
 var MapType reflect.Type
 
 func init() {
-	MapType = reflect.TypeOf(ld.Doc(nil))
+	MapType = reflect.TypeOf(ld.Node(nil))
 }
 
 type Encoder interface {
-	Encode(doc *ld.Doc) error
+	Encode(n *ld.Node) error
 }
 
 type Decoder interface {
-	Decode(doc *ld.Doc) error
+	Decode(n *ld.Node) error
 }
 
 type encoder struct {
@@ -36,8 +36,8 @@ func NewEncoder(w io.Writer) *encoder {
 	return &encoder{enc}
 }
 
-func (c *encoder) Encode(doc *ld.Doc) error {
-	return c.enc.Encode(&doc)
+func (c *encoder) Encode(n *ld.Node) error {
+	return c.enc.Encode(&n)
 }
 
 type decoder struct {
@@ -52,38 +52,38 @@ func NewDecoder(r io.Reader) *decoder {
 	return &decoder{dec}
 }
 
-func (c *decoder) Decode(doc *ld.Doc) error {
-	return c.dec.Decode(&doc)
+func (c *decoder) Decode(n *ld.Node) error {
+	return c.dec.Decode(&n)
 }
 
-// Marshal serializes an ipfs-ld document to a []byte.
-func Marshal(doc *ld.Doc) ([]byte, error) {
+// Marshal serializes an ipfs-ld nument to a []byte.
+func Marshal(n *ld.Node) ([]byte, error) {
 	var buf bytes.Buffer
-	err := MarshalTo(&buf, doc)
+	err := MarshalTo(&buf, n)
 	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-// MarshalTo serializes an ipfs-ld document to a writer.
-func MarshalTo(w io.Writer, doc *ld.Doc) error {
-	return NewEncoder(w).Encode(doc)
+// MarshalTo serializes an ipfs-ld nument to a writer.
+func MarshalTo(w io.Writer, n *ld.Node) error {
+	return NewEncoder(w).Encode(n)
 }
 
-// Unmarshal deserializes an ipfs-ld document to a []byte.
-func Unmarshal(buf []byte) (*ld.Doc, error) {
-	doc := new(ld.Doc)
-	err := UnmarshalFrom(bytes.NewBuffer(buf), doc)
+// Unmarshal deserializes an ipfs-ld nument to a []byte.
+func Unmarshal(buf []byte) (*ld.Node, error) {
+	n := new(ld.Node)
+	err := UnmarshalFrom(bytes.NewBuffer(buf), n)
 	if err != nil {
 		return nil, err
 	}
 
-	// have to call NewDoc so the initial parsing (schema) takes place.
-	return doc, nil
+	// have to call NewNode so the initial parsing (schema) takes place.
+	return n, nil
 }
 
-// UnmarshalFrom deserializes an ipfs-ld document from a reader.
-func UnmarshalFrom(r io.Reader, doc *ld.Doc) error {
-	return NewDecoder(r).Decode(doc)
+// UnmarshalFrom deserializes an ipfs-ld nument from a reader.
+func UnmarshalFrom(r io.Reader, n *ld.Node) error {
+	return NewDecoder(r).Decode(n)
 }
