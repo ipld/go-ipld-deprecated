@@ -9,12 +9,14 @@ import (
 
 // These are the constants used in the format.
 const (
-	LinkType = "mlink"
-	HashKey  = "hash"
-	ValueKey = "@value"
-	TypeKey  = "@type"
-	CtxKey   = "@context"
-	IDKey    = "@id"
+	IDKey    = "@id"      // the id of the object (JSON-LD)
+	TypeKey  = "@type"    // the type of the object (JSON-LD)
+	ValueKey = "@value"   // the value of the object (JSON-LD)
+	CtxKey   = "@context" // the JSON-LD style context
+
+	CodecKey = "@codec" // used to determine which multicodec to use
+	LinkType = "mlink"  // a merkle-link type.
+	HashKey  = "hash"   // multihash in an mlink
 )
 
 // Node is an IPLD node. effectively, it is equivalent to a JSON-LD object.
@@ -161,7 +163,7 @@ func Links(n Node) map[string]Link {
 // follow:
 //
 //   { "@type"  : "mlink", "hash": "<multihash>" }
-func isLink(v interface{}) bool {
+func IsLink(v interface{}) bool {
 	vn, ok := v.(Node)
 	if !ok {
 		return false
@@ -180,7 +182,7 @@ func isLink(v interface{}) bool {
 //
 //   { "@type"  : "mlink", "hash": "<multihash>" }
 func LinkCast(v interface{}) (l Link, ok bool) {
-	if !isLink(v) {
+	if !IsLink(v) {
 		return
 	}
 

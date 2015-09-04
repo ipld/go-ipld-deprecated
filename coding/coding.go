@@ -1,89 +1,78 @@
 package ipfsld
 
 import (
-	"bytes"
-	"io"
-	"reflect"
+	mc "github.com/jbenet/go-multicodec"
+	mccbor "github.com/jbenet/go-multicodec/cbor"
+	mcjson "github.com/jbenet/go-multicodec/json"
+	mcmux "github.com/jbenet/go-multicodec/mux"
 
-	codec "github.com/ugorji/go/codec"
-
-	ld "github.com/ipfs/go-ipld"
+	ipld "github.com/ipfs/go-ipld"
+	pb "github.com/ipfs/go-ipld/coding/pb"
 )
 
-var MapType reflect.Type
+// defaultCodec is the default applied if user does not specify a codec.
+// Most new objects will never specify a codec. We track the codecs with
+// the object so that multiple people using the same object will continue
+// to marshal using the same codec. the only reason this is important is
+// that the hashes must be the same.
+var defaultCodec string
+
+var muxCodec *mcmux.Multicodec
 
 func init() {
-	MapType = reflect.TypeOf(ld.Node(nil))
+	// by default, always encode things as cbor
+	defaultCodec = string(mc.HeaderPath(mccbor.Header))
+	muxCodec = mcmux.MuxMulticodec([]mc.Multicodec{
+		mccbor.Multicodec(),
+		mcjson.Multicodec(false),
+		pb.Multicodec(),
+	}, selectCodec)
 }
 
-type Encoder interface {
-	Encode(n *ld.Node) error
+// Multicodec returns a muxing codec that marshals to
+// whatever codec makes sense depending on what information
+// the IPLD object itself carries
+func Multicodec() mc.Multicodec {
+	return muxCodec
 }
 
-type Decoder interface {
-	Decode(n *ld.Node) error
-}
-
-type encoder struct {
-	enc *codec.Encoder
-}
-
-func NewEncoder(w io.Writer) *encoder {
-	h := new(codec.CborHandle)
-	h.MapType = MapType
-	h.Canonical = true
-	enc := codec.NewEncoder(w, h)
-	return &encoder{enc}
-}
-
-func (c *encoder) Encode(n *ld.Node) error {
-	return c.enc.Encode(&n)
-}
-
-type decoder struct {
-	dec *codec.Decoder
-}
-
-func NewDecoder(r io.Reader) *decoder {
-	h := new(codec.CborHandle)
-	h.MapType = MapType
-	h.Canonical = true
-	dec := codec.NewDecoder(r, h)
-	return &decoder{dec}
-}
-
-func (c *decoder) Decode(n *ld.Node) error {
-	return c.dec.Decode(&n)
-}
-
-// Marshal serializes an ipfs-ld nument to a []byte.
-func Marshal(n *ld.Node) ([]byte, error) {
-	var buf bytes.Buffer
-	err := MarshalTo(&buf, n)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// MarshalTo serializes an ipfs-ld nument to a writer.
-func MarshalTo(w io.Writer, n *ld.Node) error {
-	return NewEncoder(w).Encode(n)
-}
-
-// Unmarshal deserializes an ipfs-ld nument to a []byte.
-func Unmarshal(buf []byte) (*ld.Node, error) {
-	n := new(ld.Node)
-	err := UnmarshalFrom(bytes.NewBuffer(buf), n)
-	if err != nil {
-		return nil, err
+func selectCodec(v interface{}, codecs []mc.Multicodec) mc.Multicodec {
+	vn, ok := v.(*ipld.Node)
+	if !ok {
+		return nil
 	}
 
-	// have to call NewNode so the initial parsing (schema) takes place.
-	return n, nil
+	codecKey, err := codecKey(*vn)
+	if err != nil {
+		return nil
+	}
+
+	for _, c := range codecs {
+		if codecKey == string(mc.HeaderPath(c.Header())) {
+			return c
+		}
+	}
+
+	return nil // no codec
 }
 
-// UnmarshalFrom deserializes an ipfs-ld nument from a reader.
-func UnmarshalFrom(r io.Reader, n *ld.Node) error {
-	return NewDecoder(r).Decode(n)
+func codecKey(n ipld.Node) (string, error) {
+	chdr, ok := (n)[ipld.CodecKey]
+	if !ok {
+		// if no codec is defined, use our default codec
+		chdr = defaultCodec
+
+		// except, if it looks like an old, style protobuf object
+		if pb.IsOldProtobufNode(n) {
+			chdr = string(pb.Header)
+		}
+	}
+
+	chdrs, ok := chdr.(string)
+	if !ok {
+		// if chdr is not a string, cannot read codec.
+		return "", mc.ErrType
+	}
+
+	return chdrs, nil
 }
