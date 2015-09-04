@@ -1,16 +1,17 @@
 package ipfsld
 
 import (
-	"bytes"
 	"testing"
 
-	ld "github.com/ipfs/go-ipld"
+	ipld "github.com/ipfs/go-ipld"
+
+	mctest "github.com/jbenet/go-multicodec/test"
 )
 
 type TC struct {
 	cbor  []byte
-	src   ld.Node
-	links map[string]ld.Link
+	src   ipld.Node
+	links map[string]ipld.Link
 	typ   string
 	ctx   interface{}
 }
@@ -20,15 +21,15 @@ var testCases []TC
 func init() {
 	testCases = append(testCases, TC{
 		[]byte{},
-		ld.Node{
+		ipld.Node{
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
-			"baz": ld.Node{
+			"baz": ipld.Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 		},
-		map[string]ld.Link{
+		map[string]ipld.Link{
 			"baz": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
 		},
 		"",
@@ -37,30 +38,30 @@ func init() {
 
 	testCases = append(testCases, TC{
 		[]byte{},
-		ld.Node{
+		ipld.Node{
 			"foo":      "bar",
 			"@type":    "commit",
 			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
-			"baz": ld.Node{
+			"baz": ipld.Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bazz": ld.Node{
+			"bazz": ipld.Node{
 				"@type": "mlink",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar": ld.Node{
+			"bar": ipld.Node{
 				"@type": "mlinkoo",
 				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"bar2": ld.Node{
-				"foo": ld.Node{
+			"bar2": ipld.Node{
+				"foo": ipld.Node{
 					"@type": "mlink",
 					"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 				},
 			},
 		},
-		map[string]ld.Link{
+		map[string]ipld.Link{
 			"baz":      {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
 			"bazz":     {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
 			"bar2/foo": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
@@ -71,38 +72,17 @@ func init() {
 
 }
 
-func TestMarshaling(t *testing.T) {
-	for tci, tc := range testCases {
-		node1 := tc.src
-		d1, err := Marshal(&node1)
-		if err != nil {
-			t.Error("marshal error", err, tci)
-		}
+func TestHeaderMC(t *testing.T) {
+	codec := Multicodec()
+	for _, tc := range testCases {
+		mctest.HeaderTest(t, codec, &tc.src)
+	}
+}
 
-		node2, err := Unmarshal(d1)
-		if err != nil {
-			t.Error("unmarshal error", err, tci)
-		}
-
-		// these are not equal.
-		// if !reflect.DeepEqual(&node1, node2) {
-		// 	d2, _ := Marshal(node2)
-		// 	t.Log(&node1)
-		// 	t.Log(node2)
-		// 	t.Log(d1)
-		// 	t.Log(d2)
-		// 	t.Error("RTTed node not equal", tci, bytes.Equal(d1, d2))
-		// }
-
-		d2, err := Marshal(node2)
-		if err != nil {
-			t.Error("marshal error", err, tci)
-		}
-
-		if !bytes.Equal(d1, d2) {
-			t.Log(len(d1), d1)
-			t.Log(len(d2), d2)
-			t.Error("marshaled bytes not equal", tci)
-		}
+func TestRoundtripBasicMC(t *testing.T) {
+	codec := Multicodec()
+	for _, tca := range testCases {
+		var tcb ipld.Node
+		mctest.RoundTripTest(t, codec, &(tca.src), &tcb)
 	}
 }
