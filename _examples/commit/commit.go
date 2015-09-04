@@ -1,7 +1,7 @@
 package commit
 
 import (
-	dag "github.com/ipfs/go-ipfsld/dag"
+	ipld "github.com/ipfs/go-ipld"
 )
 
 // this would serialize to:
@@ -16,11 +16,11 @@ import (
 //   }
 //
 type Commit struct {
-	Parents   []dag.Link //
-	Author    dag.Link   // link to an Authorship
-	Committer dag.Link   // link to an Authorship
-	Object    dag.Link   // what we version ("tree" in git)
-	Comment   String     // describes the commit
+	Parents   []ipld.Link //
+	Author    ipld.Link   // link to an Authorship
+	Committer ipld.Link   // link to an Authorship
+	Object    ipld.Link   // what we version ("tree" in git)
+	Comment   String      // describes the commit
 }
 
 func (c *Commit) IPLDValidate() bool {
