@@ -8,7 +8,7 @@ import (
 
 type TC struct {
 	src   Node
-	links map[string]Link
+	links map[string]string
 	typ   string
 	ctx   interface{}
 }
@@ -25,66 +25,62 @@ func mmh(b58 string) mh.Multihash {
 
 func init() {
 	testCases = append(testCases, TC{
-		Node{
+		src: Node{
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
 			"baz": Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 		},
-		map[string]Link{
-			"baz": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+		links: map[string]string{
+			"baz": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 		},
-		"",
-		nil,
-	})
-
-	testCases = append(testCases, TC{
-		Node{
-			"foo":      "bar",
-			"@type":    "commit",
+		typ: "",
+		ctx: nil,
+	}, TC{
+		src: Node{
 			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
 			"baz": Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bazz": Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bar": Node{
-				"@type": "mlinkoo",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
 			},
 			"bar2": Node{
 				"foo": Node{
-					"@type": "mlink",
-					"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+					"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 				},
 			},
 		},
-		map[string]Link{
-			"baz":      {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bazz":     {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bar2/foo": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
+		links: map[string]string{
+			"baz":      "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+			"bazz":     "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+			"bar":      "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
+			"bar2/foo": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 		},
-		"",
-		"/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
+		typ: "",
+		ctx: "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
 	})
 }
 
 func TestParsing(t *testing.T) {
 	for tci, tc := range testCases {
+		t.Logf("===== Test case #%d =====", tci)
 		doc := tc.src
 
 		// check links
 		links := doc.Links()
-		t.Log(links)
+		t.Logf("links: %#v", links)
+		if len(links) != len(tc.links) {
+			t.Errorf("links do not match, not the same number of links, expected %d, got %d", len(tc.links), len(links))
+		}
 		for k, l1 := range tc.links {
 			l2 := links[k]
-			if !l1.Equal(l2) {
-				t.Errorf("links do not match. %d/%s %s != %s", tci, k, l1, l2)
+			if l1 != l2["mlink"] {
+				t.Errorf("links do not match. %d/%#v %#v != %#v[mlink]", tci, k, l1, l2)
 			}
 		}
 	}

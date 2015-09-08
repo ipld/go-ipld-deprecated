@@ -15,8 +15,7 @@ const (
 	CtxKey   = "@context" // the JSON-LD style context
 
 	CodecKey = "@codec" // used to determine which multicodec to use
-	LinkType = "mlink"  // a merkle-link type.
-	HashKey  = "hash"   // multihash in an mlink
+	LinkKey  = "mlink"  // key for merkle-links
 )
 
 // Node is an IPLD node. effectively, it is equivalent to a JSON-LD object.
@@ -98,16 +97,16 @@ func (l Link) Type() string {
 	return s
 }
 
-// HashStr returns the string value of l["hash"],
+// HashStr returns the string value of l["mlink"],
 // which is the value we use to store hashes.
-func (l Link) HashStr() string {
-	s, _ := l[HashKey].(string)
+func (l Link) LinkStr() string {
+	s, _ := l[LinkKey].(string)
 	return s
 }
 
 // Hash returns the multihash value of the link.
 func (l Link) Hash() (mh.Multihash, error) {
-	s := l.HashStr()
+	s := l.LinkStr()
 	if s == "" {
 		return nil, errors.New("no hash in link")
 	}
@@ -162,25 +161,21 @@ func Links(n Node) map[string]Link {
 // checks whether a value is a link. for now we assume that all links
 // follow:
 //
-//   { "@type"  : "mlink", "hash": "<multihash>" }
+//   { "mlink": "<multihash>" }
 func IsLink(v interface{}) bool {
 	vn, ok := v.(Node)
 	if !ok {
 		return false
 	}
 
-	ts, ok := vn[TypeKey].(string)
-	if !ok {
-		return false
-	}
-
-	return ts == LinkType
+	_, ok = vn[LinkKey].(string)
+	return ok;
 }
 
 // returns the link value of an object. for now we assume that all links
 // follow:
 //
-//   { "@type"  : "mlink", "hash": "<multihash>" }
+//   { "mlink": "<multihash>" }
 func LinkCast(v interface{}) (l Link, ok bool) {
 	if !IsLink(v) {
 		return
