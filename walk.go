@@ -76,6 +76,11 @@ func walk(root Node, curr interface{}, npath string, walkFunc WalkFunc) error {
 
 		// then recurse.
 		for k, v := range nc {
+			// Skip empty path components
+			if len(k) == 0 {
+				continue
+			}
+
 			// skip any keys which contain "/" in them.
 			// this is explicitly disallowed.
 			if strings.Contains(k, pathSep) {
