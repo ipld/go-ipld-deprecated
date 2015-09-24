@@ -9,6 +9,23 @@ import (
 
 const pathSep = "/"
 
+// Escape path component. The special characters ("@" and "\") are escaped to
+// allow mixing the path component with directives (starting with "@") in IPLD
+// data structure.
+func EscapePathComponent(comp string) string {
+	comp = strings.Replace(comp, "\\", "\\\\", -1)
+	comp = strings.Replace(comp, "@", "\\@", -1)
+	return comp
+}
+
+// Unescape path component from the IPLD data structure. Special characters are
+// unescaped. See also EscapePathComponent function.
+func UnescapePathComponent(comp string) string {
+	comp = strings.Replace(comp, "\\@", "@", -1)
+	comp = strings.Replace(comp, "\\\\", "\\", -1)
+	return comp
+}
+
 // SkipNode is a special value used with Walk and WalkFunc.
 // If a WalkFunc returns SkipNode, the walk skips the curr
 // node and its children. It behaves like file/filepath.SkipDir
@@ -87,6 +104,14 @@ func walk(root Node, curr interface{}, npath string, walkFunc WalkFunc) error {
 				continue
 			}
 
+			// skip keys starting with "@", it is reserved for directives
+			// It can be escaped using "\@" in which case, "@" is not the first
+			// character
+			if k[0] == '@' {
+				continue
+			}
+
+			k = UnescapePathComponent(k)
 			err := walk(root, v, path.Join(npath, k), walkFunc)
 			if err != nil {
 				return err
@@ -110,7 +135,7 @@ func walk(root Node, curr interface{}, npath string, walkFunc WalkFunc) error {
 
 // GetPath gets a descendant of root, at npath. GetPath
 // uses the UNIX path abstraction: components of a
-// path are delimited with "/".
+// path are delimited with "/". The path MUST start with "/".
 func GetPath(root interface{}, path_ string) interface{} {
 	path_ = path.Clean(path_)[1:] // skip root /
 	return GetPathCmp(root, strings.Split(path_, pathSep))
@@ -128,6 +153,7 @@ func GetPathCmp(root interface{}, npath []string) interface{} {
 	k := npath[0]
 	if vn, ok := root.(Node); ok {
 		// if node, recurse
+		k = EscapePathComponent(k)
 		return GetPathCmp(vn[k], npath[1:])
 
 	} else if vs, ok := root.([]interface{}); ok {
