@@ -31,9 +31,16 @@ func init() {
 			"baz": Node{
 				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
+			"test": Node {
+				// This is not a link because mlink is not a string but a Node
+				"mlink": Node{
+					"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				},
+			},
 		},
 		links: map[string]string{
-			"baz": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+			"baz":        "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+			"test/mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 		},
 		typ: "",
 		ctx: nil,
