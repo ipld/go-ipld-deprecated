@@ -6,7 +6,7 @@ import(
 
 const DefaultIndexName string = "@index"
 
-func ContainerIndexName(n ipld.Node, defaultval string) string {
+func containerIndexName(n ipld.Node, defaultval string) string {
 	var index_name string = defaultval
 
 	index_val, ok := n["@index"]
@@ -17,16 +17,20 @@ func ContainerIndexName(n ipld.Node, defaultval string) string {
 	return index_name
 }
 
+func isContainerIndex(n ipld.Node) bool {
+	return n["@container"] == "@index"
+}
+
 // Like ToLinkedDataAll but on the root node only, for use in Walk
 func ToLinkedData(d ipld.Node) ipld.Node {
-	attrs, directives, _, index := ipld.ParseNodeIndex(d)
+	attrs, directives, _, index := ParseNodeIndex(d)
 	for k, v := range directives {
 		if k != "@container" {
 			attrs[k] = v
 		}
 	}
 	if len(index) > 0 {
-		index_name := ipld.ContainerIndexName(attrs, ipld.DefaultIndexName)
+		index_name := containerIndexName(attrs, DefaultIndexName)
 		delete(attrs, "@index")
 		if index_name[0] != '@' {
 			attrs[index_name] = index
@@ -71,5 +75,49 @@ func ToLinkedDataAll(d ipld.Node) ipld.Node {
 		panic(err) // should not happen
 	}
 	return res
+}
+
+func copyNode(n ipld.Node) ipld.Node {
+	var res ipld.Node = ipld.Node{}
+	for k, v := range n {
+		res[k] = v
+	}
+	return res
+}
+
+func ParseNodeIndex(n ipld.Node) (attrs, directives, index ipld.Node, escapedIndex ipld.Node) {
+	attrs = ipld.Node{}
+	directives = ipld.Node{}
+	index = ipld.Node{}
+	escapedIndex = ipld.Node{}
+
+	if real_attrs, ok := n["@attrs"]; ok {
+		if attrs_node, ok := real_attrs.(ipld.Node); ok {
+			attrs = copyNode(attrs_node)
+		}
+	}
+
+	index_container := isContainerIndex(n)
+
+	for key, val := range n {
+		if key == "@attrs" {
+			continue
+		} else if key[0] == '@' {
+			if key == "@index" {
+				attrs[key] = val
+			} else {
+				directives[key] = val
+			}
+		} else {
+			if index_container {
+				escapedIndex[key] = val
+				index[ipld.UnescapePathComponent(key)] = val
+			} else {
+				attrs[ipld.UnescapePathComponent(key)] = val
+			}
+		}
+	}
+
+	return
 }
 
