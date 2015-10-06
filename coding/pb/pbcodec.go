@@ -95,8 +95,19 @@ func (c *decoder) Decode(v interface{}) error {
 func ld2pbNode(in *ipld.Node) (*PBNode, error) {
 	n := *in
 	var pbn PBNode
+	var attrs ipld.Node
 
-	if data, hasdata := n["data"]; hasdata {
+	if attrsvalue, hasattrs := n["@attrs"]; hasattrs {
+		var ok bool
+		attrs, ok = attrsvalue.(ipld.Node)
+		if !ok {
+			return nil, errInvalidData
+		}
+	} else {
+		return &pbn, nil
+	}
+
+	if data, hasdata := attrs["data"]; hasdata {
 		data, ok := data.([]byte)
 		if !ok {
 			return nil, errInvalidData
@@ -104,7 +115,7 @@ func ld2pbNode(in *ipld.Node) (*PBNode, error) {
 		pbn.Data = data
 	}
 
-	if links, haslinks := n["links"]; haslinks {
+	if links, haslinks := attrs["links"]; haslinks {
 		links, ok := links.([]ipld.Node)
 		if !ok {
 			return nil, errInvalidLink
@@ -128,9 +139,13 @@ func pb2ldNode(pbn *PBNode, in *ipld.Node) {
 	links := make([]ipld.Node, len(pbn.Links))
 	for i, link := range pbn.Links {
 		links[i] = pb2ldLink(link)
+		n[ipld.EscapePathComponent(link.GetName())] = links[i]
 	}
-	n["links"] = links
-	n["data"] = pbn.Data
+
+	n["@attrs"] = ipld.Node{
+		"links": links,
+		"data": pbn.Data,
+	}
 }
 
 func pb2ldLink(pbl *PBLink) (link ipld.Node) {
