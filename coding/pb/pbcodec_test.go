@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"testing"
+	"reflect"
 
 	mc "github.com/jbenet/go-multicodec"
 	mcproto "github.com/jbenet/go-multicodec/protobuf"
@@ -72,18 +73,24 @@ func TestPB2LD(t *testing.T) {
 		t.Fatal("failed to decode", err)
 	}
 
-	data, ok := n["data"].([]byte)
+	attrs, ok := n["@attrs"].(ipld.Node)
 	if !ok {
 		t.Log(n)
-		t.Fatal("invalid ipld.data")
+		t.Fatal("invalid ipld.@attrs")
+	}
+
+	data, ok := attrs["data"].([]byte)
+	if !ok {
+		t.Log(n)
+		t.Fatal("invalid ipld.@attrs.data")
 	}
 	if len(data) == 0 {
 		t.Error("should have some data")
 	}
 
-	links, ok := n["links"].([]ipld.Node)
+	links, ok := attrs["links"].([]ipld.Node)
 	if !ok {
-		t.Fatal("invalid ipld.links")
+		t.Fatal("invalid ipld.@attrs.links")
 	}
 	if len(links) < 7 {
 		t.Fatal("incorrect number of links")
@@ -103,7 +110,12 @@ func TestPB2LD(t *testing.T) {
 		return nil
 	}
 
-	makefile := findLink("Makefile")
+	makefileLink := findLink("Makefile")
+	if makefileLink == nil {
+		t.Error("did not find Makefile")
+	}
+
+	makefile := n["Makefile"].(ipld.Node)
 	if makefile == nil {
 		t.Error("did not find Makefile")
 	} else {
@@ -115,6 +127,9 @@ func TestPB2LD(t *testing.T) {
 		if size < 700 || size > 4096 {
 			t.Log(makefile)
 			t.Error("makefile incorrect size")
+		}
+		if ! reflect.DeepEqual(makefile, makefileLink) {
+			t.Error("makefile and @attrs.links[name=makefile] are not the same")
 		}
 	}
 }
@@ -131,6 +146,7 @@ func TestLD2PB(t *testing.T) {
 	}
 
 	if err := enc.Encode(&n); err != nil {
+		t.Log(n)
 		t.Fatal("failed to encode", err)
 	}
 
