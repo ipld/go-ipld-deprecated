@@ -1,12 +1,25 @@
 package ipfsld
 
 import (
+	"bytes"
 	"testing"
+	"io/ioutil"
 
 	ipld "github.com/ipfs/go-ipld"
 
+	mc "github.com/jbenet/go-multicodec"
 	mctest "github.com/jbenet/go-multicodec/test"
 )
+
+var testfile []byte
+
+func init() {
+	var err error
+	testfile, err = ioutil.ReadFile("testfile")
+	if err != nil {
+		panic("could not read testfile. please run: make testfile")
+	}
+}
 
 type TC struct {
 	cbor  []byte
@@ -84,5 +97,31 @@ func TestRoundtripBasicMC(t *testing.T) {
 	for _, tca := range testCases {
 		var tcb ipld.Node
 		mctest.RoundTripTest(t, codec, &(tca.src), &tcb)
+	}
+}
+
+// Test that a protobuf file can be decoded and re-encoded back to the same
+// format. The protobuf codec must be chosen when re-encoding, else it is an
+// error.
+func TestPbDecodeEncode(t *testing.T) {
+	var n ipld.Node
+	codec := Multicodec()
+
+	if err := mc.Unmarshal(codec, testfile, &n); err != nil {
+		t.Log(testfile)
+		t.Error(err)
+		return
+	}
+
+	encoded, err := mc.Marshal(codec, &n)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if !bytes.Equal(testfile, encoded) {
+		t.Error("marshalled values not equal")
+		t.Log(testfile)
+		t.Log(encoded)
 	}
 }

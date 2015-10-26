@@ -63,9 +63,6 @@ func codecKey(n ipld.Node) (string, error) {
 		chdr = defaultCodec
 
 		// except, if it looks like an old, style protobuf object
-		if pb.IsOldProtobufNode(n) {
-			chdr = string(pb.Header)
-		}
 	}
 
 	chdrs, ok := chdr.(string)
