@@ -11,6 +11,7 @@ import (
 	ipld "github.com/ipfs/go-ipld"
 )
 
+const CodecName string = "/mdagv1"
 var Header []byte
 
 var (
@@ -19,7 +20,7 @@ var (
 )
 
 func init() {
-	Header = mc.Header([]byte("/mdagv1"))
+	Header = mc.Header([]byte(CodecName))
 }
 
 type codec struct {
@@ -146,6 +147,7 @@ func pb2ldNode(pbn *PBNode, in *ipld.Node) {
 		"links": links,
 		"data": pbn.Data,
 	}
+	n[ipld.CodecKey] = CodecName
 }
 
 func pb2ldLink(pbl *PBLink) (link ipld.Node) {
@@ -180,44 +182,3 @@ func ld2pbLink(link ipld.Node) (pbl *PBLink) {
 	return pbl
 }
 
-func IsOldProtobufNode(n ipld.Node) bool {
-	if len(n) > 2 { // short circuit
-		return false
-	}
-
-	links, hasLinks := n["links"]
-	_, hasData := n["data"]
-
-	switch len(n) {
-	case 2: // must be links and data
-		if !hasLinks || !hasData {
-			return false
-		}
-	case 1: // must be links or data
-		if !(hasLinks || hasData) {
-			return false
-		}
-	default: // nope.
-		return false
-	}
-
-	if len(n) > 2 {
-		return false // only links and data.
-	}
-
-	if hasLinks {
-		links, ok := links.([]ipld.Node)
-		if !ok {
-			return false // invalid links.
-		}
-
-		// every link must be a mlink
-		for _, link := range links {
-			if !ipld.IsLink(link) {
-				return false
-			}
-		}
-	}
-
-	return true // ok looks like an old protobuf node
-}
