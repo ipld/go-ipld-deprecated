@@ -3,7 +3,6 @@ package ipfsld
 import (
 	mc "github.com/jbenet/go-multicodec"
 	mccbor "github.com/jbenet/go-multicodec/cbor"
-	mcjson "github.com/jbenet/go-multicodec/json"
 	mcmux "github.com/jbenet/go-multicodec/mux"
 
 	ipld "github.com/ipfs/go-ipld"
@@ -24,7 +23,7 @@ func init() {
 	defaultCodec = string(mc.HeaderPath(mccbor.Header))
 	muxCodec = mcmux.MuxMulticodec([]mc.Multicodec{
 		mccbor.Multicodec(),
-		mcjson.Multicodec(false),
+		jsonMulticodec(),
 		pb.Multicodec(),
 	}, selectCodec)
 }
@@ -61,8 +60,6 @@ func codecKey(n ipld.Node) (string, error) {
 	if !ok {
 		// if no codec is defined, use our default codec
 		chdr = defaultCodec
-
-		// except, if it looks like an old, style protobuf object
 		if pb.IsOldProtobufNode(n) {
 			chdr = string(pb.Header)
 		}

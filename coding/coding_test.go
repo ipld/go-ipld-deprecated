@@ -1,12 +1,26 @@
 package ipfsld
 
 import (
+	"io/ioutil"
 	"testing"
+	"reflect"
+	"bytes"
 
 	ipld "github.com/ipfs/go-ipld"
 
+	mc "github.com/jbenet/go-multicodec"
 	mctest "github.com/jbenet/go-multicodec/test"
 )
+
+var json_testfile []byte
+
+func init() {
+	var err error
+	json_testfile, err = ioutil.ReadFile("json.testfile")
+	if err != nil {
+		panic("could not read json.testfile. please run: make json.testfile")
+	}
+}
 
 type TC struct {
 	cbor  []byte
@@ -86,3 +100,43 @@ func TestRoundtripBasicMC(t *testing.T) {
 		mctest.RoundTripTest(t, codec, &(tca.src), &tcb)
 	}
 }
+
+// Test decoding and encoding a json file
+func TestJsonDecodeEncode(t *testing.T) {
+	var n ipld.Node
+	codec := Multicodec()
+
+	if err := mc.Unmarshal(codec, json_testfile, &n); err != nil {
+		t.Log(json_testfile)
+		t.Error(err)
+		return
+	}
+
+	linksExpected := map[string]ipld.Link{
+		"abc": ipld.Link {
+			"mlink": "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V",
+		},
+	}
+	linksActual := ipld.Links(n)
+	if !reflect.DeepEqual(linksExpected, linksActual) {
+		t.Log(linksExpected)
+		t.Log(linksActual)
+		t.Logf("node: %#v\n", n)
+		t.Fatalf("Links are not expected")
+	}
+
+	encoded, err := mc.Marshal(codec, &n)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if !bytes.Equal(json_testfile, encoded) {
+		t.Error("marshalled values not equal")
+		t.Log(string(json_testfile))
+		t.Log(string(encoded))
+		t.Log(json_testfile)
+		t.Log(encoded)
+	}
+}
+
