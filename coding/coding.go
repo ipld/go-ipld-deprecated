@@ -22,8 +22,8 @@ func init() {
 	// by default, always encode things as cbor
 	defaultCodec = string(mc.HeaderPath(mccbor.Header))
 	muxCodec = mcmux.MuxMulticodec([]mc.Multicodec{
-		mccbor.Multicodec(),
-		jsonMulticodec(),
+		CborMulticodec(),
+		JsonMulticodec(),
 		pb.Multicodec(),
 	}, selectCodec)
 }
