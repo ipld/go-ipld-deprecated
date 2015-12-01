@@ -12,13 +12,18 @@ import (
 	mctest "github.com/jbenet/go-multicodec/test"
 )
 
-var json_testfile []byte
+var codedFiles map[string][]byte = map[string][]byte{
+	"json.testfile": []byte{},
+	"cbor.testfile": []byte{},
+}
 
 func init() {
-	var err error
-	json_testfile, err = ioutil.ReadFile("json.testfile")
-	if err != nil {
-		panic("could not read json.testfile. please run: make json.testfile")
+	for fname := range codedFiles {
+		var err error
+		codedFiles[fname], err = ioutil.ReadFile(fname)
+		if err != nil {
+			panic("could not read " + fname + ". please run: make " + fname)
+		}
 	}
 }
 
@@ -101,42 +106,45 @@ func TestRoundtripBasicMC(t *testing.T) {
 	}
 }
 
-// Test decoding and encoding a json file
-func TestJsonDecodeEncode(t *testing.T) {
-	var n ipld.Node
-	codec := Multicodec()
+// Test decoding and encoding a json and cbor file
+func TestCodecsDecodeEncode(t *testing.T) {
+	for fname, testfile := range codedFiles {
+		var n ipld.Node
+		codec := Multicodec()
 
-	if err := mc.Unmarshal(codec, json_testfile, &n); err != nil {
-		t.Log(json_testfile)
-		t.Error(err)
-		return
-	}
+		if err := mc.Unmarshal(codec, testfile, &n); err != nil {
+			t.Log(testfile)
+			t.Error(err)
+			continue
+		}
 
-	linksExpected := map[string]ipld.Link{
-		"abc": ipld.Link {
-			"mlink": "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V",
-		},
-	}
-	linksActual := ipld.Links(n)
-	if !reflect.DeepEqual(linksExpected, linksActual) {
-		t.Log(linksExpected)
-		t.Log(linksActual)
-		t.Logf("node: %#v\n", n)
-		t.Fatalf("Links are not expected")
-	}
+		linksExpected := map[string]ipld.Link{
+			"abc": ipld.Link {
+				"mlink": "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V",
+			},
+		}
+		linksActual := ipld.Links(n)
+		if !reflect.DeepEqual(linksExpected, linksActual) {
+			t.Logf("Expected: %#v", linksExpected)
+			t.Logf("Actual:   %#v", linksActual)
+			t.Logf("node: %#v\n", n)
+			t.Error("Links are not expected in " + fname)
+			continue
+		}
 
-	encoded, err := mc.Marshal(codec, &n)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+		encoded, err := mc.Marshal(codec, &n)
+		if err != nil {
+			t.Error(err)
+			return
+		}
 
-	if !bytes.Equal(json_testfile, encoded) {
-		t.Error("marshalled values not equal")
-		t.Log(string(json_testfile))
-		t.Log(string(encoded))
-		t.Log(json_testfile)
-		t.Log(encoded)
+		if !bytes.Equal(testfile, encoded) {
+			t.Error("marshalled values not equal in " + fname)
+			t.Log(string(testfile))
+			t.Log(string(encoded))
+			t.Log(testfile)
+			t.Log(encoded)
+		}
 	}
 }
 
