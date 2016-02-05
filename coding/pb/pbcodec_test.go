@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"io/ioutil"
-	"testing"
 	"reflect"
+	"testing"
 
 	mc "github.com/jbenet/go-multicodec"
 	mcproto "github.com/jbenet/go-multicodec/protobuf"
 
-	ipld "github.com/ipfs/go-ipld"
+	ipld "github.com/ipfs/go-ipld/memory"
 )
 
 var testfile []byte
@@ -128,7 +128,7 @@ func TestPB2LD(t *testing.T) {
 			t.Log(makefile)
 			t.Error("makefile incorrect size")
 		}
-		if ! reflect.DeepEqual(makefile, makefileLink) {
+		if !reflect.DeepEqual(makefile, makefileLink) {
 			t.Error("makefile and @attrs.links[name=makefile] are not the same")
 		}
 	}

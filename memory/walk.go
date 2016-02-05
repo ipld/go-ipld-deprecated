@@ -1,30 +1,15 @@
-package ipld
+package memory
 
 import (
 	"errors"
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/ipfs/go-ipld/paths"
 )
 
 const pathSep = "/"
-
-// Escape path component. The special characters ("@" and "\") are escaped to
-// allow mixing the path component with directives (starting with "@") in IPLD
-// data structure.
-func EscapePathComponent(comp string) string {
-	comp = strings.Replace(comp, "\\", "\\\\", -1)
-	comp = strings.Replace(comp, "@", "\\@", -1)
-	return comp
-}
-
-// Unescape path component from the IPLD data structure. Special characters are
-// unescaped. See also EscapePathComponent function.
-func UnescapePathComponent(comp string) string {
-	comp = strings.Replace(comp, "\\@", "@", -1)
-	comp = strings.Replace(comp, "\\\\", "\\", -1)
-	return comp
-}
 
 // SkipNode is a special value used with Walk and WalkFunc.
 // If a WalkFunc returns SkipNode, the walk skips the curr
@@ -111,7 +96,7 @@ func walk(root Node, curr interface{}, npath string, walkFunc WalkFunc) error {
 				continue
 			}
 
-			k = UnescapePathComponent(k)
+			k = paths.UnescapePathComponent(k)
 			err := walk(root, v, path.Join(npath, k), walkFunc)
 			if err != nil {
 				return err
@@ -153,7 +138,7 @@ func GetPathCmp(root interface{}, npath []string) interface{} {
 	k := npath[0]
 	if vn, ok := root.(Node); ok {
 		// if node, recurse
-		k = EscapePathComponent(k)
+		k = paths.EscapePathComponent(k)
 		return GetPathCmp(vn[k], npath[1:])
 
 	} else if vs, ok := root.([]interface{}); ok {

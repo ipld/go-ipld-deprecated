@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 
+	memory "github.com/ipfs/go-ipld/memory"
+	paths "github.com/ipfs/go-ipld/paths"
 	mc "github.com/jbenet/go-multicodec"
 	mcproto "github.com/jbenet/go-multicodec/protobuf"
-
-	ipld "github.com/ipfs/go-ipld"
 )
 
 var Header []byte
@@ -56,9 +56,9 @@ type decoder struct {
 }
 
 func (c *encoder) Encode(v interface{}) error {
-	nv, ok := v.(*ipld.Node)
+	nv, ok := v.(*memory.Node)
 	if !ok {
-		return errors.New("must encode *ipld.Node")
+		return errors.New("must encode *memory.Node")
 	}
 
 	if _, err := c.w.Write(c.c.Header()); err != nil {
@@ -74,9 +74,9 @@ func (c *encoder) Encode(v interface{}) error {
 }
 
 func (c *decoder) Decode(v interface{}) error {
-	nv, ok := v.(*ipld.Node)
+	nv, ok := v.(*memory.Node)
 	if !ok {
-		return errors.New("must decode to *ipld.Node")
+		return errors.New("must decode to *memory.Node")
 	}
 
 	if err := mc.ConsumeHeader(c.r, c.c.Header()); err != nil {
@@ -92,14 +92,14 @@ func (c *decoder) Decode(v interface{}) error {
 	return nil
 }
 
-func ld2pbNode(in *ipld.Node) (*PBNode, error) {
+func ld2pbNode(in *memory.Node) (*PBNode, error) {
 	n := *in
 	var pbn PBNode
-	var attrs ipld.Node
+	var attrs memory.Node
 
 	if attrsvalue, hasattrs := n["@attrs"]; hasattrs {
 		var ok bool
-		attrs, ok = attrsvalue.(ipld.Node)
+		attrs, ok = attrsvalue.(memory.Node)
 		if !ok {
 			return nil, errInvalidData
 		}
@@ -116,7 +116,7 @@ func ld2pbNode(in *ipld.Node) (*PBNode, error) {
 	}
 
 	if links, haslinks := attrs["links"]; haslinks {
-		links, ok := links.([]ipld.Node)
+		links, ok := links.([]memory.Node)
 		if !ok {
 			return nil, errInvalidLink
 		}
@@ -132,37 +132,37 @@ func ld2pbNode(in *ipld.Node) (*PBNode, error) {
 	return &pbn, nil
 }
 
-func pb2ldNode(pbn *PBNode, in *ipld.Node) {
-	*in = make(ipld.Node)
+func pb2ldNode(pbn *PBNode, in *memory.Node) {
+	*in = make(memory.Node)
 	n := *in
 
-	links := make([]ipld.Node, len(pbn.Links))
+	links := make([]memory.Node, len(pbn.Links))
 	for i, link := range pbn.Links {
 		links[i] = pb2ldLink(link)
-		n[ipld.EscapePathComponent(link.GetName())] = links[i]
+		n[paths.EscapePathComponent(link.GetName())] = links[i]
 	}
 
-	n["@attrs"] = ipld.Node{
+	n["@attrs"] = memory.Node{
 		"links": links,
-		"data": pbn.Data,
+		"data":  pbn.Data,
 	}
 }
 
-func pb2ldLink(pbl *PBLink) (link ipld.Node) {
+func pb2ldLink(pbl *PBLink) (link memory.Node) {
 	defer func() {
 		if recover() != nil {
 			link = nil
 		}
 	}()
 
-	link = make(ipld.Node)
+	link = make(memory.Node)
 	link["hash"] = pbl.Hash
 	link["name"] = *pbl.Name
 	link["size"] = uint64(*pbl.Tsize)
 	return link
 }
 
-func ld2pbLink(link ipld.Node) (pbl *PBLink) {
+func ld2pbLink(link memory.Node) (pbl *PBLink) {
 	defer func() {
 		if recover() != nil {
 			pbl = nil
@@ -180,7 +180,7 @@ func ld2pbLink(link ipld.Node) (pbl *PBLink) {
 	return pbl
 }
 
-func IsOldProtobufNode(n ipld.Node) bool {
+func IsOldProtobufNode(n memory.Node) bool {
 	if len(n) > 2 { // short circuit
 		return false
 	}
@@ -206,14 +206,14 @@ func IsOldProtobufNode(n ipld.Node) bool {
 	}
 
 	if hasLinks {
-		links, ok := links.([]ipld.Node)
+		links, ok := links.([]memory.Node)
 		if !ok {
 			return false // invalid links.
 		}
 
 		// every link must be a mlink
 		for _, link := range links {
-			if !ipld.IsLink(link) {
+			if !memory.IsLink(link) {
 				return false
 			}
 		}

@@ -1,4 +1,4 @@
-package ipld
+package memory
 
 import (
 	"errors"
@@ -14,8 +14,7 @@ const (
 	ValueKey = "@value"   // the value of the object (JSON-LD)
 	CtxKey   = "@context" // the JSON-LD style context
 
-	CodecKey = "@codec" // used to determine which multicodec to use
-	LinkKey  = "mlink"  // key for merkle-links
+	LinkKey = "mlink" // key for merkle-links
 )
 
 // Node is an IPLD node. effectively, it is equivalent to a JSON-LD object.
@@ -169,7 +168,7 @@ func IsLink(v interface{}) bool {
 	}
 
 	_, ok = vn[LinkKey].(string)
-	return ok;
+	return ok
 }
 
 // returns the link value of an object. for now we assume that all links

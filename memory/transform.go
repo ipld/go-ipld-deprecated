@@ -1,9 +1,9 @@
-package ipld
+package memory
 
 import (
 	"errors"
-	"strconv"
 	"path"
+	"strconv"
 )
 
 // TransformFunc is the type of the function called for each node visited by
@@ -94,4 +94,3 @@ func transform(root Node, curr interface{}, npath []string, transformFunc Transf
 	}
 	return curr, nil
 }
-

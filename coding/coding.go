@@ -7,6 +7,7 @@ import (
 
 	ipld "github.com/ipfs/go-ipld"
 	pb "github.com/ipfs/go-ipld/coding/pb"
+	memory "github.com/ipfs/go-ipld/memory"
 )
 
 // defaultCodec is the default applied if user does not specify a codec.
@@ -36,7 +37,7 @@ func Multicodec() mc.Multicodec {
 }
 
 func selectCodec(v interface{}, codecs []mc.Multicodec) mc.Multicodec {
-	vn, ok := v.(*ipld.Node)
+	vn, ok := v.(*memory.Node)
 	if !ok {
 		return nil
 	}
@@ -55,7 +56,7 @@ func selectCodec(v interface{}, codecs []mc.Multicodec) mc.Multicodec {
 	return nil // no codec
 }
 
-func codecKey(n ipld.Node) (string, error) {
+func codecKey(n memory.Node) (string, error) {
 	chdr, ok := (n)[ipld.CodecKey]
 	if !ok {
 		// if no codec is defined, use our default codec
