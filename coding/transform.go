@@ -1,4 +1,4 @@
-package ipfsld
+package coding
 
 import (
 	"io"

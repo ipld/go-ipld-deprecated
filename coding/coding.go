@@ -1,4 +1,4 @@
-package ipfsld
+package coding
 
 import (
 	mc "github.com/jbenet/go-multicodec"
