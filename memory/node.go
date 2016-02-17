@@ -3,7 +3,9 @@ package memory
 import (
 	"errors"
 	"reflect"
+	"sort"
 
+	stream "github.com/ipfs/go-ipld/coding/stream"
 	mh "github.com/jbenet/go-multihash"
 )
 
@@ -185,4 +187,82 @@ func LinkCast(v interface{}) (l Link, ok bool) {
 		l[k] = v
 	}
 	return l, true
+}
+
+func (n Node) Read(fun stream.ReadFun) error {
+	err := read(n, fun, []interface{}{})
+	if err == stream.NodeReadAbort || err == stream.NodeReadSkip {
+		err = nil
+	}
+	return err
+}
+
+func read(curr interface{}, fun stream.ReadFun, path []interface{}) error {
+	if nc, ok := curr.(Node); ok { // it's a node!
+		err := fun(path, stream.TokenNode, nil)
+		if err != nil {
+			return err
+		}
+
+		// Iterate in fixed order (by default, go randomize iteration order)
+		// Simulate reading from a file where the order is fixed
+		keys := make([]string, 0, len(nc))
+		for k := range nc {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			err := fun(path, stream.TokenKey, k)
+			if err == stream.NodeReadSkip {
+				continue
+			} else if err != nil {
+				return err
+			}
+
+			subpath := append(path, k)
+			err = read(nc[k], fun, subpath)
+			if err != nil && err != stream.NodeReadSkip {
+				return err
+			}
+		}
+
+		err = fun(path, stream.TokenEndNode, nil)
+		if err != nil {
+			return err
+		}
+
+	} else if sc, ok := curr.([]interface{}); ok { // it's a slice!
+		err := fun(path, stream.TokenArray, nil)
+		if err != nil {
+			return err
+		}
+
+		for i, v := range sc {
+			err := fun(path, stream.TokenIndex, i)
+			if err == stream.NodeReadSkip {
+				continue
+			} else if err != nil {
+				return err
+			}
+
+			subpath := append(path, i)
+			err = read(v, fun, subpath)
+			if err != nil && err != stream.NodeReadSkip {
+				return err
+			}
+		}
+
+		err = fun(path, stream.TokenEndArray, nil)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		err := fun(path, stream.TokenValue, curr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
