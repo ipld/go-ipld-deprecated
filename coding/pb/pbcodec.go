@@ -1,151 +1,156 @@
 package ipldpb
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
+	ipld "github.com/ipfs/go-ipld"
 	memory "github.com/ipfs/go-ipld/memory"
-	paths "github.com/ipfs/go-ipld/paths"
+	base58 "github.com/jbenet/go-base58"
+	msgio "github.com/jbenet/go-msgio"
 	mc "github.com/jbenet/go-multicodec"
-	mcproto "github.com/jbenet/go-multicodec/protobuf"
 )
+
+const HeaderPath = "/mdagv1"
+const MsgIOHeaderPath = "/protobuf/msgio"
 
 var Header []byte
+var MsgIOHeader []byte
 
-var (
-	errInvalidData = fmt.Errorf("invalid merkledag v1 protobuf, Data not bytes")
-	errInvalidLink = fmt.Errorf("invalid merkledag v1 protobuf, invalid Links")
-)
+var errInvalidLink = fmt.Errorf("invalid merkledag v1 protobuf, invalid Links")
 
 func init() {
-	Header = mc.Header([]byte("/mdagv1"))
+	Header = mc.Header([]byte(HeaderPath))
+	MsgIOHeader = mc.Header([]byte(MsgIOHeaderPath))
 }
 
-type codec struct {
-	pbc mc.Multicodec
-}
-
-func Multicodec() mc.Multicodec {
-	var n *PBNode
-	return &codec{mcproto.Multicodec(n)}
-}
-
-func (c *codec) Encoder(w io.Writer) mc.Encoder {
-	return &encoder{w: w, c: c, pbe: c.pbc.Encoder(w)}
-}
-
-func (c *codec) Decoder(r io.Reader) mc.Decoder {
-	return &decoder{r: r, c: c, pbd: c.pbc.Decoder(r)}
-}
-
-func (c *codec) Header() []byte {
-	return Header
-}
-
-type encoder struct {
-	w   io.Writer
-	c   *codec
-	pbe mc.Encoder
-}
-
-type decoder struct {
-	r   io.Reader
-	c   *codec
-	pbd mc.Decoder
-}
-
-func (c *encoder) Encode(v interface{}) error {
-	nv, ok := v.(*memory.Node)
-	if !ok {
-		return errors.New("must encode *memory.Node")
+func Decode(r io.Reader) (memory.Node, error) {
+	err := mc.ConsumeHeader(r, MsgIOHeader)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, err := c.w.Write(c.c.Header()); err != nil {
-		return err
+	length, err := msgio.ReadLen(r, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	n, err := ld2pbNode(nv)
+	data := make([]byte, length)
+	_, err = io.ReadFull(r, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return RawDecode(data)
+}
+
+func RawDecode(data []byte) (memory.Node, error) {
+	var pbn *PBNode = new(PBNode)
+
+	err := pbn.Unmarshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	n := make(memory.Node)
+	pb2ldNode(pbn, &n)
+
+	return n, err
+}
+
+func Encode(w io.Writer, n ipld.NodeIterator, strict bool) error {
+	_, err := w.Write(MsgIOHeader)
 	if err != nil {
 		return err
 	}
 
-	return c.pbe.Encode(n)
-}
-
-func (c *decoder) Decode(v interface{}) error {
-	nv, ok := v.(*memory.Node)
-	if !ok {
-		return errors.New("must decode to *memory.Node")
-	}
-
-	if err := mc.ConsumeHeader(c.r, c.c.Header()); err != nil {
+	data, err := RawEncode(n, strict)
+	if err != nil {
 		return err
 	}
 
-	var pbn PBNode
-	if err := c.pbd.Decode(&pbn); err != nil {
-		return err
-	}
-
-	pb2ldNode(&pbn, nv)
-	return nil
+	msgio.WriteLen(w, len(data))
+	_, err = w.Write(data)
+	return err
 }
 
-func ld2pbNode(in *memory.Node) (*PBNode, error) {
-	n := *in
+func RawEncode(n ipld.NodeIterator, strict bool) ([]byte, error) {
+	pbn, err := ld2pbNode(n, strict)
+	if err != nil {
+		return nil, err
+	}
+
+	return pbn.Marshal()
+}
+
+func ld2pbNode(n ipld.NodeIterator, strict bool) (*PBNode, error) {
 	var pbn PBNode
-	var attrs memory.Node
+	has_data := false
+	has_links := false
 
-	if attrsvalue, hasattrs := n["@attrs"]; hasattrs {
-		var ok bool
-		attrs, ok = attrsvalue.(memory.Node)
-		if !ok {
-			return nil, errInvalidData
-		}
-	} else {
-		return &pbn, nil
-	}
-
-	if data, hasdata := attrs["data"]; hasdata {
-		data, ok := data.([]byte)
-		if !ok {
-			return nil, errInvalidData
-		}
-		pbn.Data = data
-	}
-
-	if links, haslinks := attrs["links"]; haslinks {
-		links, ok := links.([]memory.Node)
-		if !ok {
-			return nil, errInvalidLink
-		}
-
-		for _, link := range links {
-			pblink := ld2pbLink(link)
-			if pblink == nil {
-				return nil, fmt.Errorf("%s (%s)", errInvalidLink, link["name"])
+	for n.Next() {
+		switch n.Key() {
+		case "data":
+			has_data = true
+			data, err := n.Value()
+			if err != nil {
+				return nil, err
 			}
-			pbn.Links = append(pbn.Links, pblink)
+			pbn.Data, err = ipld.ToBytesErr(data)
+			if err != nil {
+				return nil, err
+			}
+		case "links":
+			has_links = true
+			linkit, err := n.Children()
+			if err != nil {
+				return nil, err
+			}
+			for linkit.Next() {
+				l, err := linkit.Children()
+				if err != nil {
+					return nil, err
+				}
+				pblink, err := ld2pbLink(l, strict)
+				if err != nil {
+					return nil, err
+				}
+				pbn.Links = append(pbn.Links, pblink)
+			}
+			if err := n.Error(); err != nil {
+				return nil, err
+			}
+		default:
+			if strict {
+				return nil, fmt.Errorf("Invalid merkledag v1 protobuf: node contains extra field (%s)", n.Key())
+			}
 		}
 	}
+
+	if err := n.Error(); err != nil {
+		return nil, err
+	}
+
+	if strict && !has_data {
+		return nil, fmt.Errorf("Invalid merkledag v1 protobuf: no data")
+	}
+
+	if strict && !has_links {
+		return nil, fmt.Errorf("Invalid merkledag v1 protobuf: no links")
+	}
+
 	return &pbn, nil
 }
 
 func pb2ldNode(pbn *PBNode, in *memory.Node) {
-	*in = make(memory.Node)
-	n := *in
+	var ordered_links []interface{}
 
-	links := make([]memory.Node, len(pbn.Links))
-	for i, link := range pbn.Links {
-		links[i] = pb2ldLink(link)
-		n[paths.EscapePathComponent(link.GetName())] = links[i]
+	for _, link := range pbn.Links {
+		ordered_links = append(ordered_links, pb2ldLink(link))
 	}
 
-	n["@attrs"] = memory.Node{
-		"links": links,
-		"data":  pbn.Data,
-	}
+	(*in)["data"] = pbn.GetData()
+	(*in)["links"] = ordered_links
 }
 
 func pb2ldLink(pbl *PBLink) (link memory.Node) {
@@ -156,68 +161,56 @@ func pb2ldLink(pbl *PBLink) (link memory.Node) {
 	}()
 
 	link = make(memory.Node)
-	link["hash"] = pbl.Hash
+	link[ipld.LinkKey] = base58.Encode(pbl.Hash)
 	link["name"] = *pbl.Name
 	link["size"] = uint64(*pbl.Tsize)
 	return link
 }
 
-func ld2pbLink(link memory.Node) (pbl *PBLink) {
-	defer func() {
-		if recover() != nil {
-			pbl = nil
-		}
-	}()
-
-	hash := link["hash"].([]byte)
-	name := link["name"].(string)
-	size := link["size"].(uint64)
-
+func ld2pbLink(n ipld.NodeIterator, strict bool) (pbl *PBLink, err error) {
 	pbl = &PBLink{}
-	pbl.Hash = hash
-	pbl.Name = &name
-	pbl.Tsize = &size
-	return pbl
-}
 
-func IsOldProtobufNode(n memory.Node) bool {
-	if len(n) > 2 { // short circuit
-		return false
-	}
-
-	links, hasLinks := n["links"]
-	_, hasData := n["data"]
-
-	switch len(n) {
-	case 2: // must be links and data
-		if !hasLinks || !hasData {
-			return false
-		}
-	case 1: // must be links or data
-		if !(hasLinks || hasData) {
-			return false
-		}
-	default: // nope.
-		return false
-	}
-
-	if len(n) > 2 {
-		return false // only links and data.
-	}
-
-	if hasLinks {
-		links, ok := links.([]memory.Node)
-		if !ok {
-			return false // invalid links.
-		}
-
-		// every link must be a mlink
-		for _, link := range links {
-			if !memory.IsLink(link) {
-				return false
+	for n.Next() {
+		switch n.Key() {
+		case ipld.LinkKey:
+			data, err := n.Value()
+			if err != nil {
+				return nil, err
+			}
+			hash := ipld.ToString(data)
+			if hash == nil {
+				return nil, fmt.Errorf("Invalid merkledag v1 protobuf: link is of incorect type")
+			}
+			pbl.Hash = base58.Decode(*hash)
+			if strict && base58.Encode(pbl.Hash) != *hash {
+				return nil, errInvalidLink
+			}
+		case "name":
+			data, err := n.Value()
+			if err != nil {
+				return nil, err
+			}
+			name := ipld.ToString(data)
+			if name == nil {
+				return nil, fmt.Errorf("Invalid merkledag v1 protobuf: name is of incorect type")
+			}
+			pbl.Name = name
+		case "size":
+			data, err := n.Value()
+			if err != nil {
+				return nil, err
+			}
+			size := ipld.ToUint(data)
+			if size == nil {
+				return nil, fmt.Errorf("Invalid merkledag v1 protobuf: size is of incorect type")
+			}
+			pbl.Tsize = size
+		default:
+			if strict {
+				return nil, fmt.Errorf("Invalid merkledag v1 protobuf: node contains extra field (%s)", n.Key())
 			}
 		}
 	}
 
-	return true // ok looks like an old protobuf node
+	return pbl, err
 }

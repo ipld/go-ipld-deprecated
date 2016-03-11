@@ -1,0 +1,28 @@
+--- ipld.pb.go.old	2016-02-24 10:29:39.045261549 +0100
++++ ipld.pb.go.new	2016-02-24 10:29:45.038594961 +0100
+@@ -400,12 +400,6 @@
+ 	_ = i
+ 	var l int
+ 	_ = l
+-	if m.Data != nil {
+-		data[i] = 0xa
+-		i++
+-		i = encodeVarintIpld(data, i, uint64(len(m.Data)))
+-		i += copy(data[i:], m.Data)
+-	}
+ 	if len(m.Links) > 0 {
+ 		for _, msg := range m.Links {
+ 			data[i] = 0x12
+@@ -418,6 +412,12 @@
+ 			i += n
+ 		}
+ 	}
++	if m.Data != nil {
++		data[i] = 0xa
++		i++
++		i = encodeVarintIpld(data, i, uint64(len(m.Data)))
++		i += copy(data[i:], m.Data)
++	}
+ 	if m.XXX_unrecognized != nil {
+ 		i += copy(data[i:], m.XXX_unrecognized)
+ 	}
