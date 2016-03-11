@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 
+	cbor "github.com/ipfs/go-ipld/coding/cbor"
+	json "github.com/ipfs/go-ipld/coding/json"
 	pb "github.com/ipfs/go-ipld/coding/pb"
 
 	ipld "github.com/ipfs/go-ipld"
@@ -18,19 +20,31 @@ const (
 	HeaderPath = "/mdagv1"
 )
 
-var StreamCodecs map[string]func(io.Reader) (stream.NodeReader, error)
-
 type Codec int
 
 const (
 	NoCodec       Codec = 0
 	CodecProtobuf Codec = iota
+	CodecCBOR
+	CodecJSON
+	CodecCBORNoTags
 )
+
+var StreamCodecs map[string]func(io.Reader) (stream.NodeReader, error)
 
 func init() {
 	Header = mc.Header([]byte(HeaderPath))
 
 	StreamCodecs = map[string]func(io.Reader) (stream.NodeReader, error){
+		json.HeaderPath: func(r io.Reader) (stream.NodeReader, error) {
+			return json.NewJSONDecoder(r)
+		},
+		cbor.HeaderPath: func(r io.Reader) (stream.NodeReader, error) {
+			return cbor.NewCBORDecoder(r)
+		},
+		cbor.HeaderWithTagsPath: func(r io.Reader) (stream.NodeReader, error) {
+			return cbor.NewCBORDecoder(r)
+		},
 		pb.MsgIOHeaderPath: func(r io.Reader) (stream.NodeReader, error) {
 			return pb.Decode(mc.WrapHeaderReader(pb.MsgIOHeader, r))
 		},
@@ -82,6 +96,12 @@ func DecodeLegacyProtobufBytes(data []byte) (stream.NodeReader, error) {
 
 func EncodeRaw(codec Codec, w io.Writer, node ipld.NodeIterator) error {
 	switch codec {
+	case CodecCBORNoTags:
+		return cbor.Encode(w, node, false)
+	case CodecCBOR:
+		return cbor.Encode(w, node, true)
+	case CodecJSON:
+		return json.Encode(w, node)
 	case CodecProtobuf:
 		return pb.Encode(w, node, true)
 	default:

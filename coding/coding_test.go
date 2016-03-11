@@ -14,6 +14,8 @@ import (
 )
 
 var codedFiles map[string][]byte = map[string][]byte{
+	"json.testfile":     []byte{},
+	"cbor.testfile":     []byte{},
 	"protobuf.testfile": []byte{},
 }
 
@@ -47,6 +49,10 @@ func TestCodecsEncodeDecode(t *testing.T) {
 
 		var codec Codec
 		switch fname {
+		case "json.testfile":
+			codec = CodecJSON
+		case "cbor.testfile":
+			codec = CodecCBOR
 		case "protobuf.testfile":
 			codec = CodecProtobuf
 		default:
@@ -79,6 +85,76 @@ func TestCodecsEncodeDecode(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestJsonStream(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading json.testfile")
+	json, err := DecodeReader(bytes.NewReader(codedFiles["json.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, json, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json"),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink"),
+		rt.Cb(rt.Path("abc", "mlink"), reader.TokenValue, "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V"),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenEndNode, nil),
+	})
+}
+
+func TestJsonStreamSkip(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading json.testfile")
+	json, err := DecodeReader(bytes.NewReader(codedFiles["json.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, json, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec", reader.NodeReadSkip),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink", reader.NodeReadAbort),
+	})
+}
+
+func TestCborStream(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading cbor.testfile")
+	cbor, err := DecodeReader(bytes.NewReader(codedFiles["cbor.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, cbor, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink"),
+		rt.Cb(rt.Path("abc", "mlink"), reader.TokenValue, "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V"),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json"),
+		rt.Cb(rt.Path(), reader.TokenEndNode, nil),
+	})
+}
+
+func TestCborStreamSkip(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading cbor.testfile")
+	cbor, err := DecodeReader(bytes.NewReader(codedFiles["cbor.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, cbor, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink", reader.NodeReadSkip),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json", reader.NodeReadAbort),
+	})
 }
 
 func TestPbStream(t *testing.T) {
