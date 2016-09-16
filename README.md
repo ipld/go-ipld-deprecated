@@ -7,7 +7,7 @@
 
 > TODO
 
-This is the Go implementation of the IPLD spec.
+This is the Go implementation of the [IPLD spec](https://github.com/ipld/specs/tree/master/ipld).
 
 WIP
 
