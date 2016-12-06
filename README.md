@@ -5,7 +5,7 @@
 [![](https://img.shields.io/badge/freenode-%23ipfs-blue.svg?style=flat-square)](http://webchat.freenode.net/?channels=%23ipfs)
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
-> TODO
+> The Go implementation of IPLD
 
 This is the Go implementation of the [IPLD spec](https://github.com/ipld/specs/tree/master/ipld).
 
