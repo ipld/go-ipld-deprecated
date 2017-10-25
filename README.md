@@ -1,3 +1,16 @@
+**This package is deprecated!**
+
+See instead:
+
+- Content ID / CID: https://github.com/ipfs/go-cid
+- Node interface for IPLD: https://github.com/ipfs/go-ipld-format
+- CBOR IPLD Node: https://github.com/ipfs/go-ipld-cbor
+- Git IPLD Node: https://github.com/ipfs/go-ipld-git
+- Ethereum IPLD Node: https://github.com/ipfs/go-ipld-eth
+- Bitcoin IPLD Node: https://github.com/ipfs/go-ipld-btc
+- Zcash IPLD Node: https://github.com/ipfs/go-ipld-zcash
+
+
 # go-ipld
 
 [![](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://ipn.io)
