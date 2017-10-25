@@ -9,6 +9,7 @@ go:
   - 1.5
 
 script:
+  - go get -v ./...
   - go test -race -cpu 5 ./...
 
 sudo: false #docker containers for CI
