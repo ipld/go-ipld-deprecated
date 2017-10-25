@@ -1,12 +1,12 @@
-package ipfsld
+package coding
 
 import (
 	"io"
 
+	memory "github.com/ipfs/go-ipld/memory"
 	mc "github.com/jbenet/go-multicodec"
-	mcjson "github.com/jbenet/go-multicodec/json"
 	mccbor "github.com/jbenet/go-multicodec/cbor"
-	ipld "github.com/ipfs/go-ipld"
+	mcjson "github.com/jbenet/go-multicodec/json"
 )
 
 type transformCodec struct {
@@ -26,7 +26,7 @@ func CborMulticodec() mc.Multicodec {
 }
 
 func (c *transformCodec) Decoder(r io.Reader) mc.Decoder {
-	return &transformDecoder{ c.Multicodec.Decoder(r) }
+	return &transformDecoder{c.Multicodec.Decoder(r)}
 }
 
 func (c *transformDecoder) Decode(v interface{}) error {
@@ -41,7 +41,7 @@ func convert(val interface{}) interface{} {
 	switch val.(type) {
 	case *map[string]interface{}:
 		vmi := val.(*map[string]interface{})
-		n := ipld.Node{}
+		n := memory.Node{}
 		for k, v := range *vmi {
 			n[k] = convert(v)
 			(*vmi)[k] = convert(v)
@@ -49,7 +49,7 @@ func convert(val interface{}) interface{} {
 		return &n
 	case map[string]interface{}:
 		vmi := val.(map[string]interface{})
-		n := ipld.Node{}
+		n := memory.Node{}
 		for k, v := range vmi {
 			n[k] = convert(v)
 			vmi[k] = convert(v)
@@ -57,7 +57,7 @@ func convert(val interface{}) interface{} {
 		return n
 	case *map[interface{}]interface{}:
 		vmi := val.(*map[interface{}]interface{})
-		n := ipld.Node{}
+		n := memory.Node{}
 		for k, v := range *vmi {
 			if k2, ok := k.(string); ok {
 				n[k2] = convert(v)
@@ -67,7 +67,7 @@ func convert(val interface{}) interface{} {
 		return &n
 	case map[interface{}]interface{}:
 		vmi := val.(map[interface{}]interface{})
-		n := ipld.Node{}
+		n := memory.Node{}
 		for k, v := range vmi {
 			if k2, ok := k.(string); ok {
 				n[k2] = convert(v)
@@ -82,10 +82,10 @@ func convert(val interface{}) interface{} {
 		for k, v := range slice {
 			slice[k] = convert(v)
 		}
-	case *ipld.Node:
-		convert(*val.(*ipld.Node))
-	case ipld.Node:
-		n := val.(ipld.Node)
+	case *memory.Node:
+		convert(*val.(*memory.Node))
+	case memory.Node:
+		n := val.(memory.Node)
 		for k, v := range n {
 			n[k] = convert(v)
 		}
@@ -93,4 +93,3 @@ func convert(val interface{}) interface{} {
 	}
 	return val
 }
-

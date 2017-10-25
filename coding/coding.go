@@ -1,75 +1,121 @@
-package ipfsld
+package coding
 
 import (
-	mc "github.com/jbenet/go-multicodec"
-	mccbor "github.com/jbenet/go-multicodec/cbor"
-	mcmux "github.com/jbenet/go-multicodec/mux"
+	"bytes"
+	"fmt"
+	"io"
+
+	cbor "github.com/ipfs/go-ipld/coding/cbor"
+	json "github.com/ipfs/go-ipld/coding/json"
+	pb "github.com/ipfs/go-ipld/coding/pb"
 
 	ipld "github.com/ipfs/go-ipld"
-	pb "github.com/ipfs/go-ipld/coding/pb"
+	stream "github.com/ipfs/go-ipld/coding/stream"
+	mc "github.com/jbenet/go-multicodec"
 )
 
-// defaultCodec is the default applied if user does not specify a codec.
-// Most new objects will never specify a codec. We track the codecs with
-// the object so that multiple people using the same object will continue
-// to marshal using the same codec. the only reason this is important is
-// that the hashes must be the same.
-var defaultCodec string
+var Header []byte
 
-var muxCodec *mcmux.Multicodec
+const (
+	HeaderPath = "/mdagv1"
+)
+
+type Codec int
+
+const (
+	NoCodec       Codec = 0
+	CodecProtobuf Codec = iota
+	CodecCBOR
+	CodecJSON
+	CodecCBORNoTags
+)
+
+var StreamCodecs map[string]func(io.Reader) (stream.NodeReader, error)
 
 func init() {
-	// by default, always encode things as cbor
-	defaultCodec = string(mc.HeaderPath(mccbor.Header))
-	muxCodec = mcmux.MuxMulticodec([]mc.Multicodec{
-		CborMulticodec(),
-		JsonMulticodec(),
-		pb.Multicodec(),
-	}, selectCodec)
-}
+	Header = mc.Header([]byte(HeaderPath))
 
-// Multicodec returns a muxing codec that marshals to
-// whatever codec makes sense depending on what information
-// the IPLD object itself carries
-func Multicodec() mc.Multicodec {
-	return muxCodec
-}
-
-func selectCodec(v interface{}, codecs []mc.Multicodec) mc.Multicodec {
-	vn, ok := v.(*ipld.Node)
-	if !ok {
-		return nil
+	StreamCodecs = map[string]func(io.Reader) (stream.NodeReader, error){
+		json.HeaderPath: func(r io.Reader) (stream.NodeReader, error) {
+			return json.NewJSONDecoder(r)
+		},
+		cbor.HeaderPath: func(r io.Reader) (stream.NodeReader, error) {
+			return cbor.NewCBORDecoder(r)
+		},
+		cbor.HeaderWithTagsPath: func(r io.Reader) (stream.NodeReader, error) {
+			return cbor.NewCBORDecoder(r)
+		},
+		pb.MsgIOHeaderPath: func(r io.Reader) (stream.NodeReader, error) {
+			return pb.Decode(mc.WrapHeaderReader(pb.MsgIOHeader, r))
+		},
 	}
+}
 
-	codecKey, err := codecKey(*vn)
+func DecodeReader(r io.Reader) (stream.NodeReader, error) {
+	// get multicodec first header, should be mcmux.Header
+	err := mc.ConsumeHeader(r, Header)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	for _, c := range codecs {
-		if codecKey == string(mc.HeaderPath(c.Header())) {
-			return c
-		}
+	// get next header, to select codec
+	hdr, err := mc.ReadHeader(r)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil // no codec
+	hdrPath := string(mc.HeaderPath(hdr))
+
+	fun, ok := StreamCodecs[hdrPath]
+	if !ok {
+		return nil, fmt.Errorf("no codec for %s", hdrPath)
+	}
+	return fun(r)
 }
 
-func codecKey(n ipld.Node) (string, error) {
-	chdr, ok := (n)[ipld.CodecKey]
-	if !ok {
-		// if no codec is defined, use our default codec
-		chdr = defaultCodec
-		if pb.IsOldProtobufNode(n) {
-			chdr = string(pb.Header)
-		}
+func Decode(r io.Reader) (interface{}, error) {
+	rd, err := DecodeReader(r)
+	if err != nil {
+		return nil, err
 	}
 
-	chdrs, ok := chdr.(string)
-	if !ok {
-		// if chdr is not a string, cannot read codec.
-		return "", mc.ErrType
-	}
+	return stream.NewNodeFromReader(rd)
+}
 
-	return chdrs, nil
+func DecodeBytes(data []byte) (interface{}, error) {
+	return Decode(bytes.NewReader(data))
+}
+
+func HasHeader(data []byte) bool {
+	return len(data) >= len(Header) && bytes.Equal(data[:len(Header)], Header)
+}
+
+func DecodeLegacyProtobufBytes(data []byte) (stream.NodeReader, error) {
+	return pb.RawDecode(data)
+}
+
+func EncodeRaw(codec Codec, w io.Writer, node ipld.NodeIterator) error {
+	switch codec {
+	case CodecCBORNoTags:
+		return cbor.Encode(w, node, false)
+	case CodecCBOR:
+		return cbor.Encode(w, node, true)
+	case CodecJSON:
+		return json.Encode(w, node)
+	case CodecProtobuf:
+		return pb.Encode(w, node, true)
+	default:
+		return fmt.Errorf("Unknown codec %v", codec)
+	}
+}
+
+func Encode(codec Codec, w io.Writer, node ipld.NodeIterator) error {
+	w.Write(Header)
+	return EncodeRaw(codec, w, node)
+}
+
+func EncodeBytes(codec Codec, node ipld.NodeIterator) ([]byte, error) {
+	var buf bytes.Buffer
+	err := Encode(codec, &buf, node)
+	return buf.Bytes(), err
 }

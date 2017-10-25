@@ -1,20 +1,22 @@
-package ipfsld
+package coding
 
 import (
-	"io/ioutil"
-	"testing"
-	"reflect"
 	"bytes"
+	"io/ioutil"
+	"os"
+	"testing"
 
 	ipld "github.com/ipfs/go-ipld"
-
-	mc "github.com/jbenet/go-multicodec"
-	mctest "github.com/jbenet/go-multicodec/test"
+	reader "github.com/ipfs/go-ipld/coding/stream"
+	rt "github.com/ipfs/go-ipld/coding/stream/test"
+	memory "github.com/ipfs/go-ipld/memory"
+	assrt "github.com/mildred/assrt"
 )
 
 var codedFiles map[string][]byte = map[string][]byte{
-	"json.testfile": []byte{},
-	"cbor.testfile": []byte{},
+	"json.testfile":     []byte{},
+	"cbor.testfile":     []byte{},
+	"protobuf.testfile": []byte{},
 }
 
 func init() {
@@ -29,122 +31,188 @@ func init() {
 
 type TC struct {
 	cbor  []byte
-	src   ipld.Node
-	links map[string]ipld.Link
+	src   memory.Node
+	links map[string]memory.Link
 	typ   string
 	ctx   interface{}
 }
 
-var testCases []TC
-
-func init() {
-	testCases = append(testCases, TC{
-		[]byte{},
-		ipld.Node{
-			"foo": "bar",
-			"bar": []int{1, 2, 3},
-			"baz": ipld.Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-			},
-		},
-		map[string]ipld.Link{
-			"baz": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-		},
-		"",
-		nil,
-	})
-
-	testCases = append(testCases, TC{
-		[]byte{},
-		ipld.Node{
-			"foo":      "bar",
-			"@type":    "commit",
-			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
-			"baz": ipld.Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-			},
-			"bazz": ipld.Node{
-				"@type": "mlink",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-			},
-			"bar": ipld.Node{
-				"@type": "mlinkoo",
-				"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-			},
-			"bar2": ipld.Node{
-				"foo": ipld.Node{
-					"@type": "mlink",
-					"hash":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-				},
-			},
-		},
-		map[string]ipld.Link{
-			"baz":      {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bazz":     {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-			"bar2/foo": {"@type": "mlink", "hash": ("QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo")},
-		},
-		"",
-		"/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
-	})
-
-}
-
-func TestHeaderMC(t *testing.T) {
-	codec := Multicodec()
-	for _, tc := range testCases {
-		mctest.HeaderTest(t, codec, &tc.src)
-	}
-}
-
-func TestRoundtripBasicMC(t *testing.T) {
-	codec := Multicodec()
-	for _, tca := range testCases {
-		var tcb ipld.Node
-		mctest.RoundTripTest(t, codec, &(tca.src), &tcb)
-	}
-}
-
 // Test decoding and encoding a json and cbor file
-func TestCodecsDecodeEncode(t *testing.T) {
+func TestCodecsEncodeDecode(t *testing.T) {
 	for fname, testfile := range codedFiles {
-		var n ipld.Node
-		codec := Multicodec()
 
-		if err := mc.Unmarshal(codec, testfile, &n); err != nil {
-			t.Log(testfile)
-			t.Error(err)
-			continue
-		}
-
-		linksExpected := map[string]ipld.Link{
-			"abc": ipld.Link {
-				"mlink": "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V",
-			},
-		}
-		linksActual := ipld.Links(n)
-		if !reflect.DeepEqual(linksExpected, linksActual) {
-			t.Logf("Expected: %#v", linksExpected)
-			t.Logf("Actual:   %#v", linksActual)
-			t.Logf("node: %#v\n", n)
-			t.Error("Links are not expected in " + fname)
-			continue
-		}
-
-		encoded, err := mc.Marshal(codec, &n)
+		r, err := DecodeBytes(testfile)
 		if err != nil {
 			t.Error(err)
-			return
+			continue
 		}
 
-		if !bytes.Equal(testfile, encoded) {
-			t.Error("marshalled values not equal in " + fname)
-			t.Log(string(testfile))
-			t.Log(string(encoded))
+		var codec Codec
+		switch fname {
+		case "json.testfile":
+			codec = CodecJSON
+		case "cbor.testfile":
+			codec = CodecCBOR
+		case "protobuf.testfile":
+			codec = CodecProtobuf
+		default:
+			panic("should not arrive here")
+		}
+
+		t.Logf("Decoded %s: %#v", fname, r)
+
+		outData, err := EncodeBytes(codec, r.(ipld.NodeIterator))
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+
+		if !bytes.Equal(outData, testfile) {
+			t.Errorf("%s: encoded is not the same as original", fname)
 			t.Log(testfile)
-			t.Log(encoded)
+			t.Log(string(testfile))
+			t.Log(outData)
+			t.Log(string(outData))
+			f, err := os.Create(fname + ".error")
+			if err != nil {
+				t.Error(err)
+			} else {
+				defer f.Close()
+				_, err := f.Write(outData)
+				if err != nil {
+					t.Error(err)
+				}
+			}
 		}
 	}
 }
 
+func TestJsonStream(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading json.testfile")
+	json, err := DecodeReader(bytes.NewReader(codedFiles["json.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, json, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json"),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink"),
+		rt.Cb(rt.Path("abc", "mlink"), reader.TokenValue, "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V"),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenEndNode, nil),
+	})
+}
+
+func TestJsonStreamSkip(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading json.testfile")
+	json, err := DecodeReader(bytes.NewReader(codedFiles["json.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, json, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec", reader.NodeReadSkip),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink", reader.NodeReadAbort),
+	})
+}
+
+func TestCborStream(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading cbor.testfile")
+	cbor, err := DecodeReader(bytes.NewReader(codedFiles["cbor.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, cbor, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink"),
+		rt.Cb(rt.Path("abc", "mlink"), reader.TokenValue, "QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V"),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json"),
+		rt.Cb(rt.Path(), reader.TokenEndNode, nil),
+	})
+}
+
+func TestCborStreamSkip(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading cbor.testfile")
+	cbor, err := DecodeReader(bytes.NewReader(codedFiles["cbor.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, cbor, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "abc"),
+		rt.Cb(rt.Path("abc"), reader.TokenNode, nil),
+		rt.Cb(rt.Path("abc"), reader.TokenKey, "mlink", reader.NodeReadSkip),
+		rt.Cb(rt.Path("abc"), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "@codec"),
+		rt.Cb(rt.Path("@codec"), reader.TokenValue, "/json", reader.NodeReadAbort),
+	})
+}
+
+func TestPbStream(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading protobuf.testfile")
+	t.Logf("Bytes: %v", codedFiles["protobuf.testfile"])
+	pb, err := DecodeReader(bytes.NewReader(codedFiles["protobuf.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, pb, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "data"),
+		rt.Cb(rt.Path("data"), reader.TokenValue, []byte{0x08, 0x01}),
+		rt.Cb(rt.Path(), reader.TokenKey, "links"),
+		rt.Cb(rt.Path("links"), reader.TokenArray, nil),
+		rt.Cb(rt.Path("links"), reader.TokenIndex, 0),
+		rt.Cb(rt.Path("links", 0), reader.TokenNode, nil),
+		rt.Cb(rt.Path("links", 0), reader.TokenKey, ipld.LinkKey),
+		rt.Cb(rt.Path("links", 0, ipld.LinkKey), reader.TokenValue, "Qmbvkmk9LFsGneteXk3G7YLqtLVME566ho6ibaQZZVHaC9"),
+		rt.Cb(rt.Path("links", 0), reader.TokenKey, "name"),
+		rt.Cb(rt.Path("links", 0, "name"), reader.TokenValue, "a"),
+		rt.Cb(rt.Path("links", 0), reader.TokenKey, "size"),
+		rt.Cb(rt.Path("links", 0, "size"), reader.TokenValue, uint64(10)),
+		rt.Cb(rt.Path("links", 0), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path("links"), reader.TokenIndex, 1),
+		rt.Cb(rt.Path("links", 1), reader.TokenNode, nil),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, ipld.LinkKey),
+		rt.Cb(rt.Path("links", 1, ipld.LinkKey), reader.TokenValue, "QmR9pC5uCF3UExca8RSrCVL8eKv7nHMpATzbEQkAHpXmVM"),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, "name"),
+		rt.Cb(rt.Path("links", 1, "name"), reader.TokenValue, "b"),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, "size"),
+		rt.Cb(rt.Path("links", 1, "size"), reader.TokenValue, uint64(10)),
+		rt.Cb(rt.Path("links", 1), reader.TokenEndNode, nil),
+		rt.Cb(rt.Path("links"), reader.TokenEndArray, nil),
+		rt.Cb(rt.Path(), reader.TokenEndNode, nil),
+	})
+}
+
+func TestPbStreamSkip(t *testing.T) {
+	a := assrt.NewAssert(t)
+	t.Logf("Reading protobuf.testfile")
+	t.Logf("Bytes: %v", codedFiles["protobuf.testfile"])
+	pb, err := DecodeReader(bytes.NewReader(codedFiles["protobuf.testfile"]))
+	a.MustNil(err)
+
+	rt.CheckReader(t, pb, []rt.Callback{
+		rt.Cb(rt.Path(), reader.TokenNode, nil),
+		rt.Cb(rt.Path(), reader.TokenKey, "data"),
+		rt.Cb(rt.Path("data"), reader.TokenValue, []byte{0x08, 0x01}),
+		rt.Cb(rt.Path(), reader.TokenKey, "links"),
+		rt.Cb(rt.Path("links"), reader.TokenArray, nil),
+		rt.Cb(rt.Path("links"), reader.TokenIndex, 0, reader.NodeReadSkip),
+		rt.Cb(rt.Path("links"), reader.TokenIndex, 1),
+		rt.Cb(rt.Path("links", 1), reader.TokenNode, nil),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, ipld.LinkKey),
+		rt.Cb(rt.Path("links", 1, ipld.LinkKey), reader.TokenValue, "QmR9pC5uCF3UExca8RSrCVL8eKv7nHMpATzbEQkAHpXmVM"),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, "name", reader.NodeReadSkip),
+		rt.Cb(rt.Path("links", 1), reader.TokenKey, "size"),
+		rt.Cb(rt.Path("links", 1, "size"), reader.TokenValue, uint64(10), reader.NodeReadAbort),
+	})
+}

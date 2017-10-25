@@ -1,4 +1,4 @@
-package ipld
+package memory
 
 import (
 	"testing"
@@ -29,12 +29,12 @@ func init() {
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
 			"baz": Node{
-				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
-			"test": Node {
+			"test": Node{
 				// This is not a link because mlink is not a string but a Node
 				"mlink": Node{
-					"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 				},
 			},
 		},
@@ -48,20 +48,20 @@ func init() {
 		src: Node{
 			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
 			"baz": Node{
-				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bazz": Node{
-				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bar": Node{
-				"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
+				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
 			},
 			"bar2": Node{
 				"@bar": Node{
-					"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 				},
 				"\\@foo": Node{
-					"mlink":  "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 				},
 			},
 		},
