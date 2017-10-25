@@ -1,10 +1,10 @@
 PB = $(wildcard *.proto)
 GO = $(PB:.proto=.pb.go)
 
-all: $(GO) test.pb
+all: $(GO) testfile
 
 %.pb.go: %.proto
-	protoc --gogo_out=. --proto_path=../../../../../../:/usr/local/opt/protobuf/include:. $<
+	protoc --gogo_out=. --proto_path=${GOPATH}/src:. --proto_path=/usr/local/opt/protobuf241/include:. $<
 
 clean:
 	rm -f *.pb.go
