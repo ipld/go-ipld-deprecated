@@ -20,7 +20,7 @@ See instead:
 
 > The Go implementation of IPLD
 
-This is the Go implementation of the [IPLD spec](https://github.com/ipld/specs/tree/master/ipld).
+This is the Go implementation of the [IPLD spec](https://github.com/ipld/specs/blob/master/IPLD.md).
 
 WIP
 
