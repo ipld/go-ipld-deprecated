@@ -1,7 +1,23 @@
-**This package is deprecated!**
+<div align="center">
+  <a href="https://ipld.io"><img src="https://ipld.io/img/ipld-logo.png" alt="IPLD hex logo" /></a>
+</div>
 
-See instead:
+# The entry point repo for the Golang implementation of the IPLD
 
+[![](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://protocol.ai)
+[![](https://img.shields.io/badge/project-ipld-blue.svg?style=flat-square)](http://ipld.io/)
+[![](https://img.shields.io/badge/freenode-%23ipfs-blue.svg?style=flat-square)](http://webchat.freenode.net/?channels=%23ipfs)
+[![](https://img.shields.io/badge/pm-waffle-blue.svg?style=flat-square")](https://waffle.io/ipld/go-ipld)
+
+> The JavaScript implementation of the IPLD, InterPlanetary Linked-Data
+
+## Project Status
+
+[![Throughput Graph](https://graphs.waffle.io/ipld/go-ipld/throughput.svg)](https://waffle.io/ipld/go-ipld/metrics/throughput)
+
+## IPLD Repos
+
+Check the current IPLD Work at the following repos:
 - Content ID / CID: https://github.com/ipfs/go-cid
 - Node interface for IPLD: https://github.com/ipfs/go-ipld-format
 - CBOR IPLD Node: https://github.com/ipfs/go-ipld-cbor
@@ -10,31 +26,9 @@ See instead:
 - Bitcoin IPLD Node: https://github.com/ipfs/go-ipld-btc
 - Zcash IPLD Node: https://github.com/ipfs/go-ipld-zcash
 
-
-# go-ipld
-
-[![](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://ipn.io)
-[![](https://img.shields.io/badge/project-IPFS-blue.svg?style=flat-square)](http://ipfs.io/)
-[![](https://img.shields.io/badge/freenode-%23ipfs-blue.svg?style=flat-square)](http://webchat.freenode.net/?channels=%23ipfs)
-[![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
-
-> The Go implementation of IPLD
-
-This is the Go implementation of the [IPLD spec](https://github.com/ipld/specs/blob/master/IPLD.md).
-
-WIP
-
-## Install
-
-TODO
-
-## Usage
-
-TODO
-
 ## Contribute
 
-Feel free to join in. All welcome. Open an [issue](https://github.com/ipfs/go-ipld/issues)!
+Feel free to join in. All welcome. Open an [issue](https://github.com/ipld/go-ipld/issues)!
 
 This repository falls under the IPFS [Code of Conduct](https://github.com/ipfs/community/blob/master/code-of-conduct.md).
 
